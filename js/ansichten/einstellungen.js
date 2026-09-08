@@ -183,6 +183,7 @@ export async function einstellungenZeigen(wurzel) {
     el('div', { class: 'knopfreihe' },
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hilfe'; } }, 'Hilfe'),
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hoai'; } }, 'HOAI'),
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#synopse'; } }, 'Synopse'),
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#vorlagen'; } }, 'Dokumentvorlagen'),
     ),
 

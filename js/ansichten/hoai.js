@@ -42,7 +42,9 @@ export async function hoaiZeigen(wurzel, sprungziel) {
   wurzel.append(
     el('div', { class: 'seitenkopf' },
       el('h1', { text: 'HOAI' }),
-      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#rechner'; } }, 'Zum Rechner'),
+      el('div', { class: 'knopfreihe', style: 'margin:0' },
+        el('button', { class: 'knopf leise', onclick: () => { location.hash = '#synopse'; } }, 'Synopse'),
+        el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#rechner'; } }, 'Zum Rechner')),
     ),
     el('p', { class: 'unterzeile', text: 'Honorarordnung für Architekten und Ingenieure — Volltext, Honorartafeln und die Werte, mit denen diese App rechnet.' }),
   );

@@ -553,3 +553,32 @@ input.zahl.schmal { max-width: 76px; min-height: 34px; padding: 4px 8px; }
 .marke.aktiv { color: var(--accent); border-color: var(--accent); }
 .marke.ruht { color: var(--warn); border-color: var(--warn); }
 .marke.fertig { color: var(--grey-2); background: var(--flaeche); }
+
+/* ————————————————————————————————————————————————————————————————
+   Synopse
+   ———————————————————————————————————————————————————————————————— */
+
+.absatz { margin: 0 0 16px; }
+.absatzkopf {
+  letter-spacing: .06em; text-transform: uppercase; color: var(--grey-2);
+  margin-bottom: 5px;
+}
+.absatz p { margin: 0 0 4px; font-size: 13.5px; line-height: 1.62; }
+
+/* Entfernter Text durchgestrichen, neuer unterlegt — beides mit Farbe UND
+   einer zweiten Auszeichnung, damit es auch ohne Farbunterscheidung lesbar
+   bleibt. */
+.raus, .diff .raus {
+  color: var(--fehler); text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.rein, .diff .rein {
+  color: var(--ink); background: rgba(20, 184, 166, .16);
+  box-shadow: 0 1px 0 var(--accent);
+}
+.diff { white-space: pre-wrap; }
+
+.marke.geaendert { color: var(--warn); border-color: var(--warn); }
+.marke.neu { color: var(--accent); border-color: var(--accent); }
+.marke.entfallen { color: var(--fehler); border-color: var(--fehler); }
+.norm > summary .marke { margin-left: auto; }
