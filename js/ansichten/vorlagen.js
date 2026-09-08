@@ -171,6 +171,7 @@ function musterDaten(einst, art) {
   const schrift = SCHRIFTEN[c.schrift] || SCHRIFTEN.geist;
 
   return {
+    belegart: art === 'schluss' ? 'SR' : 'AR',
     buero: { ...einst.buero, ...anschriftZeilen(einst.buero), telefon: telefonZeigen(einst.buero) },
     empfaenger: MUSTEREMPFAENGER,
     projekt: MUSTERPROJEKT,

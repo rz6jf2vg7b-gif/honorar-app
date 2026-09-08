@@ -54,9 +54,15 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
   let schritt = 0;
   let formular = null;
 
+  // Belegarten, bei denen die Art des Honorars offen ist. Abschlags-,
+  // Teilschluss- und Schlussrechnung rechnen kumulativ gegen den Vertragsstand
+  // — dort ist die HOAI-Ermittlung nicht wählbar, sondern zwingend.
+  const HONORARART_WAEHLBAR = [BELEGART.ANGEBOT, BELEGART.NACHTRAG, BELEGART.EINZEL];
+
   const schritte = () => {
     const s = ['art', 'projekt', 'empfaenger'];
-    if (entwurf.art === BELEGART.EINZEL) {
+    if (HONORARART_WAEHLBAR.includes(entwurf.art)) s.push('honorarart');
+    if (entwurf.honorarart === 'positionen') {
       s.push('positionen');
     } else {
       s.push('vertrag');
@@ -94,6 +100,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
 
     ({
       art: schrittArt, projekt: schrittProjekt, empfaenger: schrittEmpfaenger,
+      honorarart: schrittHonorarart,
       vertrag: schrittVertrag, stand: schrittStand, positionen: schrittPositionen,
       beleg: schrittBeleg, pruefen: schrittPruefen,
     })[name](inhalt);
@@ -120,7 +127,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     box.append(el('h1', { text: 'Was soll erstellt werden?' }));
     const liste = el('ul', { class: 'liste' });
     const arten = [
-      [BELEGART.ANGEBOT, 'Honorarangebot auf Grundlage der HOAI'],
+      [BELEGART.ANGEBOT, 'Honorarangebot — nach HOAI, als Pauschale oder nach Zeit'],
       [BELEGART.NACHTRAG, 'Änderung des Vertragsstands, z. B. geänderte anrechenbare Kosten'],
       [BELEGART.ABSCHLAG, 'Kumulativ auf den Vertragsstand, zieht bisherige Rechnungen ab'],
       [BELEGART.TEILSCHLUSS, 'Schließt einen Teil der Leistung endgültig ab'],
@@ -130,7 +137,13 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     for (const [art, beschreibung] of arten) {
       liste.append(el('li', {}, el('button', {
         class: 'eintrag', type: 'button',
-        onclick: () => { entwurf.art = art; entwurf.kumulativ = art !== BELEGART.EINZEL; schritt++; zeichnen(); },
+        onclick: () => {
+          entwurf.art = art;
+          entwurf.kumulativ = art !== BELEGART.EINZEL;
+          // Einzelrechnungen stehen für sich, alles andere folgt zunächst der HOAI.
+          entwurf.honorarart = art === BELEGART.EINZEL ? 'positionen' : 'hoai';
+          schritt++; zeichnen();
+        },
       },
         el('div', { class: 'haupt' },
           el('div', { class: 'titel', text: BELEGART_TEXT[art] }),
@@ -316,14 +329,17 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
   async function schrittVertrag(box) {
     const vorhanden = await vertraegeZuProjekt(entwurf.projektId);
     const istNachtrag = entwurf.art === BELEGART.NACHTRAG;
-    const istEinzel = entwurf.art === BELEGART.EINZEL;
+    // Wer über Positionen rechnet, kommt hier gar nicht mehr vorbei — die
+    // Schrittfolge führt direkt zu den Positionen. Der Zweig bleibt als
+    // Rückfall, falls ein alter Entwurf ohne honorarart geladen wird.
+    const istEinzel = entwurf.honorarart === 'positionen';
 
     box.append(el('h1', {
       text: istNachtrag ? 'Neuer Vertragsstand' : (vorhanden.length ? 'Vertragsstand' : 'Vertragsdaten erfassen'),
     }));
 
     if (istEinzel) {
-      box.append(el('p', { class: 'unterzeile', text: 'Einzelrechnungen brauchen keinen Vertragsstand. Positionen werden im nächsten Schritt erfasst.' }));
+      box.append(el('p', { class: 'unterzeile', text: 'Bei Pauschale oder Zeithonorar gibt es keinen Vertragsstand. Die Positionen werden im nächsten Schritt erfasst.' }));
       box.append(weiterLeiste('Weiter'));
       return;
     }
@@ -457,12 +473,59 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     );
   }
 
-  // ── Positionen (nur ohne Vertragsstand) ──────────────
+  // ── Honorarart ───────────────────────────────────────
+  // Die HOAI schreibt die Honorarermittlung nicht in jedem Fall vor: Für
+  // Leistungen außerhalb ihres Anwendungsbereichs (§ 1) und für Besondere
+  // Leistungen ist das Honorar frei vereinbar, und seit 2021 gilt das auch für
+  // Grundleistungen — die Tafelwerte sind Orientierungswerte (§ 2a, § 7).
+  // Ein Angebot über eine Pauschale ist damit kein Sonderfall, sondern Alltag.
+  function schrittHonorarart(box) {
+    const istAngebot = entwurf.art === BELEGART.ANGEBOT;
+    box.append(
+      el('h1', { text: 'Wie wird das Honorar ermittelt?' }),
+      el('p', { class: 'unterzeile', text: istAngebot
+        ? 'Bestimmt, was im Angebot steht: die vollständige Herleitung nach HOAI oder eine Aufstellung von Positionen.'
+        : 'Bestimmt, wie der Betrag zustande kommt.' }),
+    );
+
+    const arten = [
+      ['hoai', 'Nach HOAI ermitteln',
+        'Anrechenbare Kosten, Honorarzone, Leistungsphasen — die Herleitung steht vollständig auf dem Beleg.'],
+      ['positionen', 'Pauschale oder Zeithonorar',
+        'Frei vereinbarte Positionen: ein Pauschalbetrag, Stunden mal Satz, oder beides nebeneinander.'],
+    ];
+
+    const liste = el('ul', { class: 'liste' });
+    for (const [wert, titel, beschreibung] of arten) {
+      liste.append(el('li', {}, el('button', {
+        class: 'eintrag', type: 'button',
+        onclick: () => {
+          entwurf.honorarart = wert;
+          // Der jeweils andere Weg wird geräumt, damit nicht ein alter
+          // Vertragsentwurf mitläuft, während Positionen gerechnet werden.
+          if (wert === 'positionen') vertragEntwurf = null;
+          else entwurf.positionen = [];
+          schritt++; zeichnen();
+        },
+      },
+        el('div', { class: 'haupt' },
+          el('div', { class: 'titel', text: titel }),
+          el('div', { class: 'neben', text: beschreibung })),
+        entwurf.honorarart === wert ? el('span', { class: 'marke aktiv', text: 'gewählt' }) : null,
+        el('span', { class: 'pfeil', text: '›' }),
+      )));
+    }
+    box.append(liste, weiterLeiste('Weiter'));
+  }
+
+  // ── Positionen (Pauschale und Zeithonorar) ───────────
   function schrittPositionen(box) {
     if (!entwurf.positionen) entwurf.positionen = [];
     box.append(
       el('h1', { text: 'Positionen' }),
-      el('p', { class: 'unterzeile', text: 'Einzelrechnungen stehen für sich — Zeithonorar, Pauschalen oder Besondere Leistungen.' }),
+      el('p', { class: 'unterzeile', text: entwurf.art === BELEGART.ANGEBOT
+        ? 'Was angeboten wird: Pauschalbeträge, Zeithonorar oder beides nebeneinander.'
+        : 'Frei vereinbarte Positionen — Zeithonorar, Pauschalen oder Besondere Leistungen.' }),
       feld({
         label: 'Bezeichnung der Leistung', wert: entwurf.leistungsbezeichnung || '',
         platzhalter: 'z. B. Zusatzleistung Wasserschaden',
@@ -696,7 +759,10 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     try {
       let vertrag = vertragBestand;
       // Vertragsdaten speichern, wenn neu oder geaendert
-      if (vertragEntwurf && entwurf.art !== BELEGART.EINZEL) {
+      // Kein Vertragsstand, wenn über Positionen gerechnet wird: Ein Angebot
+      // über eine Pauschale legt keinen HOAI-Vertragsstand an, gegen den später
+      // Abschläge liefen — das wäre ein Vertrag, den es nie gab.
+      if (vertragEntwurf && entwurf.honorarart !== 'positionen') {
         const gleich = vertragBestand && JSON.stringify(vergleichbar(vertragBestand)) === JSON.stringify(vergleichbar(vertragEntwurf));
         if (!gleich) {
           vertrag = await vertragAnlegen({
@@ -707,7 +773,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
           });
         }
       }
-      if (!vertrag && entwurf.art !== BELEGART.EINZEL) vertrag = leererVertrag();
+      if (!vertrag && entwurf.honorarart !== 'positionen') vertrag = leererVertrag();
 
       entwurf.vertragId = vertrag?.id || null;
       let beleg = await belegSpeichern({ ...entwurf });

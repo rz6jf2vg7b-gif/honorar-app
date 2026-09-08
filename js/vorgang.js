@@ -249,7 +249,9 @@ export async function belegRechnen(entwurf, vertrag) {
     : [];
 
   const abrechnung = erstelleAbrechnung({
-    art: IST_RECHNUNG(entwurf.art) ? entwurf.art : 'ER',
+    // Die Belegart wird durchgereicht, nicht auf "Einzelrechnung" abgebildet:
+    // Sonst stand auf einem Angebot "Einzelrechnung".
+    art: entwurf.art,
     nummer: entwurf.nummer || '—',
     datum: entwurf.datumDe,
     leistungen: [ermittlung],

@@ -51,6 +51,7 @@ export async function belegAnsehen(wurzel, belegId) {
   }
 
   const belegdaten = () => ({
+    belegart: beleg.art,
     // Der Beleg bekommt die zusammengesetzten Zeilen, nicht die Einzelfelder.
     buero: { ...einst.buero, ...anschriftZeilen(einst.buero), telefon: telefonZeigen(einst.buero) },
     // Reihenfolge nach DIN 5008: Firma, Firmenzusatz, Person, Adresszusatz,

@@ -77,6 +77,8 @@ function bausteinHtml(b) {
 /**
  * @param {object} d
  * @param {object} d.buero        Absenderdaten
+ * @param {string} d.belegart      Belegart ("AN", "NA", "AR", "TS", "SR", "ER").
+ *                                 Steuert, ob der Beleg Geld fordert.
  * @param {object} d.empfaenger   {name, zusatz?, ansprechpartner?, zeile2?, strasse, plzOrt}
  * @param {object} d.projekt      {nummer, name, kuerzel?, vorhaben?}
  * @param {object} d.abrechnung   Ergebnis aus erstelleAbrechnung()
@@ -90,6 +92,15 @@ function bausteinHtml(b) {
  */
 export function rechnungHtml(d) {
   const cd = cdVervollstaendigen(d.cd || CD_KREATIVLABOR42);
+
+  // Ein Angebot fordert kein Geld: Es traegt keine Zahlungsaufforderung und
+  // keine Bankverbindung, und die Summe heisst nicht "Betrag zur Zahlung".
+  // Beides auf ein Angebot zu setzen waere nicht nur unsauber — es koennte als
+  // Rechnung missverstanden werden, und eine Rechnung ueber eine noch nicht
+  // erbrachte Leistung ist keine.
+  const fordertGeld = !['AN', 'NA'].includes(d.belegart);
+  const betraglabel = { AN: 'Angebotssumme', NA: 'Nachtragssumme' }[d.belegart]
+    || 'Betrag zur Zahlung';
   const a = d.abrechnung;
   const b = d.buero;
   const ermittlungen = d.ermittlungen || [];
@@ -215,13 +226,15 @@ export function rechnungHtml(d) {
     ${grundlagen}
 
     <div class="betrag">
-      <div class="betraglabel">Betrag zur Zahlung${a.ustSatz ? ` · inkl. ${h(prozent(a.ustSatz))} USt.` : ''}</div>
+      <div class="betraglabel">${h(betraglabel)}${a.ustSatz ? ` · inkl. ${h(prozent(a.ustSatz))} USt.` : ''}</div>
       <div class="betragwert">${h(eur(a.zahlbetrag))}</div>
     </div>
 
-    <p class="zahlungshinweis">${h(d.zahlungsziel
+    ${fordertGeld ? `<p class="zahlungshinweis">${h(d.zahlungsziel
       || 'Bitte überweisen Sie den Rechnungsbetrag ohne Abzüge auf das folgende Konto.')}
-      ${b.bank ? `<br><span class="bank">${h(b.bank)} · IBAN ${h(b.iban || '')} · BIC ${h(b.bic || '')}</span>` : ''}</p>
+      ${b.bank ? `<br><span class="bank">${h(b.bank)} · IBAN ${h(b.iban || '')} · BIC ${h(b.bic || '')}</span>` : ''}</p>`
+    : `<p class="zahlungshinweis">${h(d.bindefrist
+      || 'Dieses Angebot ist freibleibend. Die Vergütung wird erst mit Auftragserteilung geschuldet.')}</p>`}
 
     <p class="gruss">Mit freundlichen Grüßen</p>
     <p class="signatur"><b>${h(b.inhaber || b.name)}</b>${b.funktion ? `<br>${h(b.funktion)}` : ''}</p>
@@ -253,7 +266,7 @@ export function rechnungHtml(d) {
         <td class="num">${h(eur(z.gezahlt))}</td>
         <td class="num">${h(eur(z.offen))}</td></tr>`).join('')}
       </tbody>
-      <tfoot><tr><td colspan="3">Betrag zur Zahlung</td>
+      <tfoot><tr><td colspan="3">${h(betraglabel)}</td>
         <td class="num">${h(eur(a.zahlbetrag))}</td></tr></tfoot>
     </table>` : '';
 

@@ -77,19 +77,26 @@ export async function rechnerZeigen(wurzel) {
 
   const ergebnisBox = el('div');
   const phasenBox = el('div');
+  const grundhonorarZeile = el('p', { class: 'trefferzahl' });
 
   const neuRechnen = () => {
-    zeichnePhasen();
+    // Erst rechnen, dann zeichnen: Die Phasentabelle weist die Beträge aus und
+    // braucht dafür das Grundhonorar. Schlägt die Rechnung fehl (etwa weil
+    // keine Phase gewählt ist), wird ohne Beträge gezeichnet.
+    let ergebnis = null;
+    let fehlertext = null;
     try {
-      const e = rechne(z);
-      leeren(ergebnisBox);
-      ergebnisBox.append(ergebnisZeichnen(e, z));
+      ergebnis = rechne(z);
     } catch (fehler) {
-      leeren(ergebnisBox);
-      ergebnisBox.append(el('div', { class: 'karte hinweiskarte' },
-        el('h3', { text: 'So lässt sich nicht rechnen' }),
-        el('p', { class: 'hinweis fehler', text: fehler.message })));
+      fehlertext = fehler.message;
     }
+    zeichnePhasen(ergebnis);
+    leeren(ergebnisBox);
+    ergebnisBox.append(ergebnis
+      ? ergebnisZeichnen(ergebnis, z)
+      : el('div', { class: 'karte hinweiskarte' },
+        el('h3', { text: 'So lässt sich nicht rechnen' }),
+        el('p', { class: 'hinweis fehler', text: fehlertext })));
   };
 
   // ── Grundlagen ────────────────────────────────────────
@@ -175,14 +182,24 @@ export async function rechnerZeigen(wurzel) {
   );
 
   // ── Leistungsphasen ───────────────────────────────────
-  function zeichnePhasen() {
+  function zeichnePhasen(ergebnis) {
     leeren(phasenBox);
     const lb = LEISTUNGSBILDER[z.leistungsbild];
     const gl = GRUNDLEISTUNGEN[z.leistungsbild];
 
+    // Das Grundhonorar bei 100 % — die Bezugsgröße beider Euro-Spalten.
+    // Zuschläge und Nebenkosten stehen bewusst nicht darin: Sie beziehen sich
+    // auf die Summe, nicht auf die einzelne Phase.
+    const gh = ergebnis?.grundhonorar100 ?? null;
+    const eur = (anteil) => (gh === null ? '—' : eurZeigen(runde2(gh * anteil)));
+    grundhonorarZeile.textContent = gh === null
+      ? 'Grundhonorar noch nicht berechenbar'
+      : `Grundhonorar bei 100 %: ${eurZeigen(gh)}`;
+
     const kopf = el('tr', {},
       el('th', { text: '' }), el('th', { text: 'LPh' }), el('th', { text: 'Leistungsphase' }),
-      el('th', { class: 'r', text: 'HOAI' }), el('th', { class: 'r', text: 'gewählt' }),
+      el('th', { class: 'r', text: 'HOAI' }), el('th', { class: 'r', text: 'HOAI €' }),
+      el('th', { class: 'r', text: 'gewählt' }), el('th', { class: 'r', text: 'gewählt €' }),
     );
     const koerper = el('tbody');
 
@@ -219,16 +236,19 @@ export async function rechnerZeigen(wurzel) {
         }, p.offen ? '▾' : '▸')
         : el('span', { class: 'klein', text: '' });
 
+      const gewaehltAnteil = p.an ? (p.anteil ?? hoaiAnteil) : 0;
       koerper.append(el('tr', { class: p.an ? '' : 'aus' },
         el('td', {}, zelleAufklappen),
         el('td', { class: 'mono' }, schalter, el('span', { text: ` ${nr}` })),
         el('td', { text: lb.namen[nr] || '' }),
         el('td', { class: 'r mono grau', text: prozent(hoaiAnteil) }),
+        el('td', { class: 'r mono grau', text: eur(hoaiAnteil) }),
         el('td', { class: 'r' }, el('div', { class: 'mitEinheit eng' }, anteilFeld, el('span', { class: 'einheit', text: '%' }))),
+        el('td', { class: `r mono ${p.an ? '' : 'grau'}`, text: p.an ? eur(gewaehltAnteil) : '—' }),
       ));
 
       if (p.offen && gl?.phasen?.[nr]) {
-        const zelle = el('td', { colspan: 5 });
+        const zelle = el('td', { colspan: 7 });
         zelle.append(teilleistungenZeichnen(nr, gl.phasen[nr], hoaiAnteil, p, bewertung, z, () => {
           neuRechnen();
         }));
@@ -244,7 +264,9 @@ export async function rechnerZeigen(wurzel) {
           el('tfoot', {}, el('tr', {},
             el('td', { text: '' }), el('td', { text: '' }), el('td', { text: 'Summe' }),
             el('td', { class: 'r mono grau', text: prozent(summeHoai) }),
+            el('td', { class: 'r mono grau', text: eur(summeHoai) }),
             el('td', { class: 'r mono', text: prozent(summeGewaehlt) }),
+            el('td', { class: 'r mono', text: eur(summeGewaehlt) }),
           )),
         )),
       el('div', { class: 'knopfreihe' },
@@ -258,7 +280,10 @@ export async function rechnerZeigen(wurzel) {
 
   wurzel.append(
     el('div', { class: 'abschnitt' }, el('h2', { text: 'Leistungsphasen' })),
-    el('p', { class: 'klein', text: 'Die Spalte HOAI zeigt die Bewertung der Verordnung, die Spalte gewählt den vereinbarten Anteil. Das Dreieck öffnet die Grundleistungen der Phase für eine Teilleistungsabrechnung.' }),
+    el('p', { class: 'klein', text: 'Die Spalte HOAI zeigt die Bewertung der Verordnung, die Spalte gewählt den vereinbarten Anteil — beides zusätzlich in Euro. '
+      + 'Die Beträge sind reines Grundhonorar; Umbauzuschlag, Nebenkosten und Umsatzsteuer kommen darauf, weil sie sich auf die Summe beziehen, nicht auf die einzelne Phase. '
+      + 'Das Dreieck öffnet die Grundleistungen der Phase für eine Teilleistungsabrechnung.' }),
+    grundhonorarZeile,
     phasenBox,
   );
 

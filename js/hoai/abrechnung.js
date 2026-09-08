@@ -30,7 +30,16 @@ export const ART_BEZEICHNUNG = {
   TS: 'Teilschlussrechnung',
   SR: 'Schlussrechnung',
   ER: 'Einzelrechnung',
+  // Angebot und Nachtrag fordern kein Geld. Sie durchlaufen dieselbe
+  // Aufstellung — die Betraege entstehen genauso —, tragen aber eine andere
+  // Ueberschrift und keine Zahlungsaufforderung. Bis zum 08.09.2026 fehlten
+  // sie hier, weshalb ein Angebot im Blatt "Einzelrechnung" hiess.
+  AN: 'Angebot',
+  NA: 'Nachtrag',
 };
+
+/** Belegarten, die eine Zahlung verlangen. */
+export const FORDERT_ZAHLUNG = (art) => !['AN', 'NA'].includes(art);
 
 /**
  * @param {object} r
