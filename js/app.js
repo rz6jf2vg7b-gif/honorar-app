@@ -63,7 +63,7 @@ async function leiten() {
   const [weg, wert] = roh.split('/');
   const bereich = {
     beleg: 'dashboard', belege: 'dashboard',
-    projekt: 'projekte', adresse: 'kontakte', stammdaten: 'projekte',
+    projekt: 'projekte', adresse: 'kontakte', stammdaten: 'projekte', unterlagen: 'projekte',
     vorlagen: 'einstellungen', synopse: 'hoai', rechtliches: 'einstellungen',
   }[weg] || weg;
   navigationBauen(bereich);
@@ -102,6 +102,9 @@ async function leiten() {
     } else if (weg === 'hoai') {
       const { hoaiZeigen } = await import('./ansichten/hoai.js');
       await hoaiZeigen(inhalt, wert);
+    } else if (weg === 'unterlagen') {
+      const { unterlagenZeigen } = await import('./ansichten/unterlagen.js');
+      await unterlagenZeigen(inhalt, wert);
     } else if (weg === 'rechtliches') {
       const { rechtlichesZeigen } = await import('./ansichten/rechtliches.js');
       await rechtlichesZeigen(inhalt);

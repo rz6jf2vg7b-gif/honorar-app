@@ -185,6 +185,13 @@ export async function projektAnsehen(wurzel, projektId) {
       zeile('Schriftverkehr-Pfad', projekt.pfadSchriftverkehr),
     ));
 
+  // ── Unterlagen ───────────────────────────────────────
+  wurzel.append(el('h2', { text: 'Unterlagen' }),
+    el('p', { class: 'klein', text: 'Vertragsdatenblatt und Abnahmeprotokoll — mit den Angaben dieses Projekts.' }),
+    el('div', { class: 'knopfreihe' },
+      el('button', { class: 'knopf zweit', type: 'button',
+        onclick: () => { location.hash = `#unterlagen/${projektId}`; } }, 'Unterlagen erzeugen')));
+
   // ── Vertragsstände ───────────────────────────────────
   wurzel.append(el('h2', { text: `Vertragsstände (${vertraege.length})` }));
   if (!vertraege.length) {
