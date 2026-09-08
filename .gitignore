@@ -1,0 +1,27 @@
+# Whitelist statt Ausschlussliste: Alles ist ausgeschlossen, nur die Dateien der
+# App selbst sind ausdruecklich zugelassen. Grund ist die Erfahrung vom August
+# 2026, als Projektkataloge ueber GitHub Pages oeffentlich abrufbar waren — eine
+# Ausschlussliste vergisst man, eine Whitelist nicht.
+#
+# Draussen bleiben insbesondere:
+#   docs/          Musterrechnungen mit IBAN, Steuernummer, Kundenname, Beträgen
+#   tests/         Beträge und Rechnungsnummern echter Projekte
+#   tools/         Mustergenerator mit Bankverbindung, untermStrich-Export mit
+#                  Server-Adresse und Keychain-Namen
+#   .claude/       lokale Pfade
+#   assets/        Bildmarke des Buros — wird von der App nicht genutzt
+
+/*
+
+!/.gitignore
+!/index.html
+!/manifest.webmanifest
+!/sw.js
+!/css/
+!/js/
+!/icons/
+!/README.md
+
+# innerhalb der zugelassenen Ordner
+.DS_Store
+node_modules/
