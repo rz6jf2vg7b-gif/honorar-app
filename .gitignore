@@ -14,6 +14,10 @@
 /*
 
 !/.gitignore
+# GitHub Pages liest die eigene Domain aus dieser Datei. Ohne sie fiele die
+# Anwendung bei jedem Push auf die github.io-Adresse zurueck — GitHub setzt
+# die Custom Domain zurueck, wenn CNAME im Repo fehlt.
+!/CNAME
 !/index.html
 !/manifest.webmanifest
 !/sw.js
