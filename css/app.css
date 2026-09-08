@@ -464,3 +464,83 @@ dl.werte div.summe dt, dl.werte div.summe dd { color: var(--ink); }
   background: #fff; margin-top: 6px;
 }
 @media (max-width: 560px) { .vorschau { height: 62vh; } }
+
+/* ————————————————————————————————————————————————————————————————
+   Rechner
+   ———————————————————————————————————————————————————————————————— */
+
+.kostengruppe {
+  display: grid; grid-template-columns: 70px 1fr 150px 190px 40px;
+  gap: 10px; align-items: end; margin-bottom: 8px;
+}
+.kostengruppe .feld { margin-bottom: 0; }
+@media (max-width: 860px) {
+  .kostengruppe { grid-template-columns: 70px 1fr; }
+  .kostengruppe .feld:nth-child(3), .kostengruppe .feld:nth-child(4) { grid-column: span 2; }
+}
+.knopf.schmal { min-width: 40px; padding: 0 10px; }
+
+.phasentabelle td { vertical-align: middle; }
+.phasentabelle tr.aus td { color: var(--grey-2); }
+.phasentabelle input[type="checkbox"] { vertical-align: middle; }
+.aufklapp {
+  border: 0; background: none; cursor: pointer; color: var(--grey-2);
+  font-size: 13px; padding: 4px 6px; min-width: 28px;
+}
+.aufklapp:hover { color: var(--accent); }
+input.zahl.schmal { max-width: 76px; min-height: 34px; padding: 4px 8px; }
+.mitEinheit.eng { gap: 4px; justify-content: flex-end; }
+
+/* Grundleistungen einer Phase */
+.teilzeile > td { background: var(--flaeche); padding: 12px 10px !important; }
+.teilleistungen { display: flex; flex-direction: column; gap: 2px; margin: 8px 0; }
+.teilzeile-inhalt {
+  display: grid; grid-template-columns: 22px 26px 1fr 96px;
+  gap: 8px; align-items: start; padding: 6px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.teilzeile-inhalt .buchstabe { color: var(--grey-2); font-size: 12px; padding-top: 3px; }
+.teilzeile-inhalt .teiltext { font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+@media (max-width: 560px) {
+  .teilzeile-inhalt { grid-template-columns: 22px 26px 1fr; }
+  .teilzeile-inhalt .mitEinheit { grid-column: 3; justify-content: flex-start; }
+}
+
+.formelblock {
+  border-left: 2px solid var(--hair); padding: 8px 0 8px 14px; margin: 12px 0;
+}
+.formelblock .formel { font-size: 13px; color: var(--grey-1); }
+.formelblock .eingesetzt { font-size: 12px; color: var(--grey-2); margin-top: 3px; }
+.formelblock .ergebnis { font-size: 14px; color: var(--ink); margin-top: 5px; font-weight: 600; }
+
+.herleitungsklapp { margin-top: 18px; }
+.herleitungsklapp > summary {
+  cursor: pointer; padding: 10px 0; border-top: 1px solid var(--hair);
+  font: 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--grey-2);
+}
+.herleitungsklapp > summary:hover { color: var(--accent); }
+.herleitung h3 { margin-top: 20px; }
+
+/* Volltext der Verordnung */
+.norm { border-bottom: 1px solid var(--hair); }
+.norm > summary {
+  cursor: pointer; padding: 11px 0; display: flex; gap: 12px; align-items: baseline;
+}
+.norm > summary:hover { color: var(--accent); }
+.norm > summary .fund { color: var(--accent); font-size: 11px; min-width: 78px; flex: 0 0 auto; }
+.normtext { padding: 2px 0 16px 90px; max-width: 74ch; }
+.normtext p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.62; color: var(--ink-soft); }
+@media (max-width: 560px) {
+  .norm > summary { flex-direction: column; gap: 2px; }
+  .normtext { padding-left: 0; }
+}
+
+.markenreihe { display: flex; gap: 6px; flex-wrap: wrap; margin: -8px 0 16px; }
+.markenreihe .marke {
+  font: 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--grey-2); border: 1px solid var(--hair); border-radius: var(--r); padding: 5px 7px;
+}
+.fliess.notiz { white-space: pre-wrap; }
+.teilfuss { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hair); }
+.teilfuss .klein.fehler { color: var(--fehler); }
+.teilfuss .hinweis.fehler { margin-top: 6px; max-width: 68ch; }

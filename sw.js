@@ -16,7 +16,7 @@
 // Nutzerdaten liegen in IndexedDB und werden hier nie angefasst — ein Fehler im
 // Service Worker darf niemals eine Rechnung kosten.
 
-const FASSUNG = 'honorarapp-v6';
+const FASSUNG = 'honorarapp-v7';
 
 // Wie lange auf das Netz gewartet wird, bevor der Zwischenspeicher einspringt.
 // Kurz genug, dass es im Zug nicht haengt; lang genug fuer eine normale Antwort.
@@ -34,6 +34,8 @@ const KERN = [
   './js/ansichten/stammdaten.js', './js/ansichten/stammdatenDetail.js',
   './js/ansichten/einstellungen.js', './js/ansichten/hilfe.js',
   './js/ansichten/hoai.js', './js/ansichten/vorlagen.js',
+  './js/ansichten/rechner.js', './js/ansichten/herleitung.js',
+  './js/hoai/grundleistungen.js',
 ];
 
 self.addEventListener('install', (e) => {

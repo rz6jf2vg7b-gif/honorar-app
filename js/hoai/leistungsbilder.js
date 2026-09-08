@@ -37,7 +37,8 @@ export const LEISTUNGSBILDER = {
     anrechenbareKosten: 'gebaeude',        // Regelwerk nach § 33
     namen: LPH_NAMEN_OBJEKT,
     phasen: { 1: 0.02, 2: 0.07, 3: 0.15, 4: 0.03, 5: 0.25, 6: 0.10, 7: 0.04, 8: 0.32, 9: 0.02 },
-    umbauzuschlagBis: 0.33,               // § 36 Abs. 1
+    umbauzuschlagBis: 0.33,
+    umbauzuschlagFundstelle: '§ 36 Abs. 1',
   },
 
   innenraeume: {
@@ -48,7 +49,11 @@ export const LEISTUNGSBILDER = {
     anrechenbareKosten: 'gebaeude',
     namen: LPH_NAMEN_OBJEKT,
     phasen: { 1: 0.02, 2: 0.07, 3: 0.15, 4: 0.02, 5: 0.30, 6: 0.07, 7: 0.03, 8: 0.32, 9: 0.02 },
-    umbauzuschlagBis: 0.33,
+    // § 36 Abs. 2 — bei Innenräumen bis 50 %, nicht 33 % wie bei Gebäuden.
+    // Stand hier bis 08.09.2026 falsch mit 0.33; aufgefallen erst beim Abgleich
+    // mit dem Verordnungstext.
+    umbauzuschlagBis: 0.50,
+    umbauzuschlagFundstelle: '§ 36 Abs. 2',
   },
 
   freianlagen: {
@@ -77,6 +82,8 @@ export const LEISTUNGSBILDER = {
       { schluessel: 'lph5_aufwand', bezeichnung: 'LPh 5 mit 15–35 % (überdurchschnittlicher Zeichnungsaufwand)',
         fundstelle: '§ 43 Abs. 3 Nr. 2', phase: 5, von: 0.15, bis: 0.35, textform: true },
     ],
+    umbauzuschlagBis: 0.33,
+    umbauzuschlagFundstelle: '§ 44 Abs. 6',
   },
 
   verkehrsanlagen: {
@@ -87,6 +94,8 @@ export const LEISTUNGSBILDER = {
     anrechenbareKosten: 'verkehrsanlagen',
     namen: LPH_NAMEN_BAUOBERLEITUNG,
     phasen: { 1: 0.02, 2: 0.20, 3: 0.25, 4: 0.08, 5: 0.15, 6: 0.10, 7: 0.04, 8: 0.15, 9: 0.01 },
+    umbauzuschlagBis: 0.33,
+    umbauzuschlagFundstelle: '§ 48 Abs. 6',
   },
 
   tragwerksplanung: {
@@ -105,6 +114,8 @@ export const LEISTUNGSBILDER = {
       { schluessel: 'lph5_enge_bewehrung', bezeichnung: 'LPh 5 um bis zu 4 % erhöht (sehr enge Bewehrung)',
         fundstelle: '§ 51 Abs. 4', phase: 5, zuschlagBis: 0.04 },
     ],
+    umbauzuschlagBis: 0.50,
+    umbauzuschlagFundstelle: '§ 52 Abs. 4',
   },
 
   technische_ausruestung: {
@@ -121,6 +132,8 @@ export const LEISTUNGSBILDER = {
       { schluessel: 'lph5_abschlag_montageplaene', bezeichnung: 'LPh 5 abzüglich 4 % (Prüfen der Montage-/Werkstattpläne nicht beauftragt)',
         fundstelle: '§ 55 Abs. 2', phase: 5, abschlag: 0.04 },
     ],
+    umbauzuschlagBis: 0.50,
+    umbauzuschlagFundstelle: '§ 56 Abs. 5',
   },
 };
 

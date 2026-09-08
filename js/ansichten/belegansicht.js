@@ -10,7 +10,7 @@
 //     mit Hinweis geoeffnet. Das ist eine Grenze des Browsers, keine Bequemlichkeit.
 
 import { el, leeren, melden, eurZeigen, feld, zahlLesen, isoNachDe, bestaetigen, dateiSpeichern } from '../ui.js';
-import { SPEICHER, lesen, alle, einstellungenLesen, anschriftZeilen, telefonZeigen } from '../db.js';
+import { SPEICHER, lesen, alle, einstellungenLesen, anschriftZeilen, telefonZeigen, personName } from '../db.js';
 import {
   BELEGART_TEXT, IST_RECHNUNG, STATUS, belegRechnen, belegFestschreiben,
   belegStornieren, zahlungErfassen,
@@ -59,9 +59,7 @@ export async function belegAnsehen(wurzel, belegId) {
     empfaenger: adresse ? {
       name: adresse.name,
       zusatz: adresse.zusatz,
-      ansprechpartner: adresse.ansprechpartner
-        ? `z. Hd. ${[adresse.anrede, adresse.ansprechpartner].filter(Boolean).join(' ')}`
-        : '',
+      ansprechpartner: personName(adresse) ? `z. Hd. ${personName(adresse)}` : '',
       zeile2: adresse.adresszeile2 || '',
       strasse: adresse.strasse, plzOrt: `${adresse.plz || ''} ${adresse.ort || ''}`.trim(),
     } : { name: '—', strasse: '', plzOrt: '' },

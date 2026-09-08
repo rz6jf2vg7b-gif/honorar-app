@@ -9,7 +9,7 @@
 // damit es nur eine Stelle gibt, an der ein Datensatz geschrieben wird.
 
 import { el, leeren, eurZeigen, isoNachDe, melden, bestaetigen } from '../ui.js';
-import { SPEICHER, lesen, alle, loeschen } from '../db.js';
+import { SPEICHER, lesen, alle, loeschen, personName } from '../db.js';
 import { BELEGART_TEXT, IST_RECHNUNG, STATUS, vertraegeZuProjekt } from '../vorgang.js';
 import { LEISTUNGSBILDER, ZONE_ROEMISCH } from '../hoai/leistungsbilder.js';
 import { runde2, prozent } from '../hoai/geld.js';
@@ -162,11 +162,16 @@ export async function adresseAnsehen(wurzel, adresseId) {
     .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
 
   wurzel.append(...kopf(
-    'Empfänger',
+    'Kontakt',
     adresse.name,
-    [adresse.zusatz, `${adresse.plz || ''} ${adresse.ort || ''}`.trim(),
+    [personName(adresse), adresse.zusatz, `${adresse.plz || ''} ${adresse.ort || ''}`.trim(),
       adresse.quelle === 'untermstrich' ? 'aus untermStrich' : 'selbst angelegt'].filter(Boolean).join(' · '),
   ));
+
+  if (adresse.kategorien?.length) {
+    wurzel.append(el('div', { class: 'markenreihe' },
+      ...adresse.kategorien.map((k) => el('span', { class: 'marke', text: k }))));
+  }
 
   const rechnungen = eigene.filter((b) => IST_RECHNUNG(b.art) && b.status === STATUS.FEST);
   const gestellt = runde2(rechnungen.reduce((s, b) => s + (b.brutto || 0), 0));
@@ -183,20 +188,33 @@ export async function adresseAnsehen(wurzel, adresseId) {
 
   wurzel.append(el('h2', { text: 'Anschrift und Kontakt' }),
     el('dl', { class: 'werte' },
-      zeile('Name', adresse.name),
-      zeile('Zusatz / z. Hd.', adresse.zusatz),
-      zeile('Anrede', adresse.anrede),
-      zeile('Vorname', adresse.vorname),
+      zeile('Name / Firma', adresse.name),
+      zeile('Firmenzusatz', adresse.zusatz),
+      zeile('Ansprechpartner', personName(adresse)),
       zeile('Straße', adresse.strasse),
+      zeile('Zweite Adresszeile', adresse.adresszeile2),
       zeile('PLZ', adresse.plz),
       zeile('Ort', adresse.ort),
       zeile('Land', adresse.land),
       zeile('E-Mail', adresse.mail),
       zeile('Telefon', adresse.telefon),
+      zeile('Weitere Nummer', adresse.telefon2),
+      zeile('Mobil', adresse.mobil),
+      zeile('Fax', adresse.fax),
+      zeile('Web', adresse.web),
+      zeile('USt-IdNr.', adresse.ustId),
       zeile('Debitorennummer', adresse.debitor),
       zeile('Leitweg-ID', adresse.leitwegId),
       zeile('Herkunft', adresse.quelle === 'untermstrich' ? 'untermStrich' : 'eigene Eingabe'),
     ));
+
+  if (adresse.notiz) {
+    wurzel.append(
+      el('h2', { text: 'Interne Notiz' }),
+      el('p', { class: 'fliess notiz', text: adresse.notiz }),
+      el('p', { class: 'klein', text: 'Nur zum Wiederfinden — steht nie auf einem Beleg.' }),
+    );
+  }
 
   if (!adresse.leitwegId) {
     wurzel.append(el('p', { class: 'hinweis', text:

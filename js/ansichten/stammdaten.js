@@ -15,7 +15,7 @@
 // eigene bleiben immer erhalten.
 
 import { el, leeren, melden, feld, dateiLaden, bestaetigen } from '../ui.js';
-import { SPEICHER, alle, schreiben, schreibeViele, loeschen, neueId } from '../db.js';
+import { SPEICHER, alle, schreiben, schreibeViele, loeschen, neueId, personName } from '../db.js';
 
 // ————————————————————————————————————————————————————————————————
 // Projekte
@@ -77,13 +77,14 @@ export async function kontakteZeigen(wurzel) {
         // nur ueber den Firmennamen. Wer "Hanz" sucht, meint den
         // Ansprechpartner; wer "Insolvenz" sucht, meint die Notiz.
         suchtextVon: (a) => [
-          a.name, a.zusatz, a.ansprechpartner, a.strasse, a.adresszeile2,
-          a.plz, a.ort, a.mail, a.telefon, a.telefon2, a.notiz,
+          a.name, a.zusatz, a.vorname, a.ansprechpartner, a.titel,
+          a.strasse, a.adresszeile2, a.plz, a.ort,
+          a.mail, a.telefon, a.telefon2, a.mobil, a.web, a.notiz,
           ...(a.kategorien || []),
         ].filter(Boolean).join(' '),
         titelVon: (a) => a.name,
         nebenVon: (a) => [
-          a.ansprechpartner ? `${a.anrede || ''} ${a.ansprechpartner}`.trim() : null,
+          personName(a) || null,
           a.zusatz,
           `${a.plz || ''} ${a.ort || ''}`.trim() || null,
           a.quelle === 'eigen' ? 'eigen' : null,
@@ -200,7 +201,7 @@ async function einspielen(art, danach) {
 
 const schluessel = (e, art) => (art === 'projekte'
   ? `${e.nummer || ''}|${e.name || ''}`
-  : `${e.name || ''}|${e.plz || ''}|${e.strasse || ''}|${e.ansprechpartner || ''}`);
+  : `${e.name || ''}|${e.plz || ''}|${e.strasse || ''}|${e.vorname || ''}|${e.ansprechpartner || ''}`);
 
 // ————————————————————————————————————————————————————————————————
 // Bearbeiten
@@ -244,13 +245,17 @@ export function adresseBearbeiten(adresse, danach) {
     zusatz: feld({ label: 'Firmenzusatz', wert: adresse?.zusatz || '', hinweis: 'z. B. Rechtsanwälte, Steuerberatung' }),
     anrede: feld({ label: 'Anrede', art: 'auswahl', wert: adresse?.anrede || '',
       optionen: [{ wert: '', text: '—' }, 'Herr', 'Frau', 'Firma'] }),
-    ansprechpartner: feld({ label: 'Ansprechpartner', wert: adresse?.ansprechpartner || '' }),
+    titel: feld({ label: 'Titel', wert: adresse?.titel || '', platzhalter: 'Dr., Dipl.-Ing.' }),
+    vorname: feld({ label: 'Vorname', wert: adresse?.vorname || '' }),
+    ansprechpartner: feld({ label: 'Nachname', wert: adresse?.ansprechpartner || '' }),
     strasse: feld({ label: 'Straße und Nr.', wert: adresse?.strasse || '' }),
     zeile2: feld({ label: 'Zweite Adresszeile', wert: adresse?.adresszeile2 || '', hinweis: 'z. B. c/o, Gebäude, Zimmer' }),
     plz: feld({ label: 'PLZ', wert: adresse?.plz || '', inputmode: 'numeric' }),
     ort: feld({ label: 'Ort', wert: adresse?.ort || '' }),
     mail: feld({ label: 'E-Mail', art: 'email', wert: adresse?.mail || '' }),
     telefon: feld({ label: 'Telefon', wert: adresse?.telefon || '' }),
+    mobil: feld({ label: 'Mobil', wert: adresse?.mobil || '' }),
+    web: feld({ label: 'Web', wert: adresse?.web || '' }),
     notiz: feld({ label: 'Interne Notiz', art: 'mehrzeilig', zeilen: 2, wert: adresse?.notiz || '',
       hinweis: 'Nur zum Wiederfinden — steht nie auf einem Beleg.' }),
     leitweg: feld({
@@ -260,10 +265,12 @@ export function adresseBearbeiten(adresse, danach) {
   };
   dialog(adresse ? 'Kontakt bearbeiten' : 'Kontakt anlegen',
     [f.name, f.zusatz,
-      el('div', { class: 'reihe-plzort' }, f.anrede, f.ansprechpartner),
+      el('div', { class: 'reihe-plzort' }, f.anrede, f.titel),
+      el('div', { class: 'feldreihe' }, f.vorname, f.ansprechpartner),
       f.strasse, f.zeile2,
       el('div', { class: 'reihe-plzort' }, f.plz, f.ort),
-      f.mail, f.telefon, f.notiz, f.leitweg],
+      f.mail, el('div', { class: 'feldreihe' }, f.telefon, f.mobil), f.web,
+      f.notiz, f.leitweg],
     async () => {
       const name = f.name.eingabe.value.trim();
       if (!name) { melden('Der Name fehlt.', 'fehler'); return false; }
@@ -273,6 +280,8 @@ export function adresseBearbeiten(adresse, danach) {
         name,
         zusatz: f.zusatz.eingabe.value.trim(),
         anrede: f.anrede.eingabe.value,
+        titel: f.titel.eingabe.value.trim(),
+        vorname: f.vorname.eingabe.value.trim(),
         ansprechpartner: f.ansprechpartner.eingabe.value.trim(),
         strasse: f.strasse.eingabe.value.trim(),
         adresszeile2: f.zeile2.eingabe.value.trim(),
@@ -280,6 +289,8 @@ export function adresseBearbeiten(adresse, danach) {
         ort: f.ort.eingabe.value.trim(),
         mail: f.mail.eingabe.value.trim(),
         telefon: f.telefon.eingabe.value.trim(),
+        mobil: f.mobil.eingabe.value.trim(),
+        web: f.web.eingabe.value.trim(),
         notiz: f.notiz.eingabe.value.trim(),
         leitwegId: f.leitweg.eingabe.value.trim(),
         quelle: adresse?.quelle || 'eigen',

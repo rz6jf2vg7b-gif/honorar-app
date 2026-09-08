@@ -193,6 +193,24 @@ function bueroAngleichen(b) {
 }
 
 /** Anschrift und Telefon fuer die Ausgabe zusammensetzen. */
+/**
+ * Setzt den Namen eines Ansprechpartners aus seinen Teilen zusammen.
+ *
+ *   {anrede:'Herr', titel:'Dr.', vorname:'Matthias', ansprechpartner:'Moser'}
+ *   -> "Herr Dr. Matthias Moser"
+ *
+ * An einer Stelle, weil sonst Liste, Anschriftfeld und Detailansicht
+ * auseinanderlaufen. `mitAnrede` steuert, ob "Herr"/"Frau" mitkommt: Im
+ * Anschriftfeld gehoert die Anrede dazu, in einer Trefferliste stoert sie.
+ */
+export function personName(a, { mitAnrede = true } = {}) {
+  if (!a) return '';
+  return [
+    mitAnrede ? a.anrede : null,
+    a.titel, a.vorname, a.ansprechpartner,
+  ].map((x) => (x || '').trim()).filter(Boolean).join(' ');
+}
+
 export function anschriftZeilen(buero) {
   const strasse = [buero.strasse, buero.hausnummer].filter(Boolean).join(' ').trim();
   const ort = [buero.plz, buero.ort].filter(Boolean).join(' ').trim();
@@ -210,6 +228,11 @@ export async function einstellungenLesen() {
     buero: bueroAngleichen({ ...VORGABE_EINSTELLUNGEN.buero, ...(roh.buero || {}) }),
     cd: { ...VORGABE_EINSTELLUNGEN.cd, ...(roh.cd || {}) },
     vorgaben: { ...VORGABE_EINSTELLUNGEN.vorgaben, ...(roh.vorgaben || {}) },
+    // Eigene Bewertung der Teilleistungen je Leistungsbild und Leistungsphase,
+    // vom Nutzer im Rechner eingetragen: {leistungsbild: {phase: {buchstabe: anteil}}}.
+    // Kein Vorgabewert — die HOAI kennt diese Bewertung nicht, und eine erfundene
+    // waere schlimmer als keine.
+    teilleistungen: roh.teilleistungen || {},
   };
 }
 

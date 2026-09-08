@@ -22,8 +22,9 @@ const ANSICHTEN = [
 // Telefon waere ein sechstes Ziel zu viel, und die Hilfe schlaegt man nach —
 // man arbeitet nicht darin.
 const NEBENANSICHTEN = [
-  { weg: 'hilfe', text: 'Hilfe', symbol: SYMBOL.hilfe },
+  { weg: 'rechner', text: 'Rechner', symbol: SYMBOL.rechner },
   { weg: 'hoai', text: 'HOAI', symbol: SYMBOL.buch },
+  { weg: 'hilfe', text: 'Hilfe', symbol: SYMBOL.hilfe },
 ];
 
 const inhalt = document.getElementById('inhalt');
@@ -94,6 +95,9 @@ async function leiten() {
     } else if (weg === 'hilfe') {
       const { hilfeZeigen } = await import('./ansichten/hilfe.js');
       await hilfeZeigen(inhalt);
+    } else if (weg === 'rechner') {
+      const { rechnerZeigen } = await import('./ansichten/rechner.js');
+      await rechnerZeigen(inhalt);
     } else if (weg === 'hoai') {
       const { hoaiZeigen } = await import('./ansichten/hoai.js');
       await hoaiZeigen(inhalt, wert);

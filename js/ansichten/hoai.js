@@ -35,14 +35,28 @@ const REGELN = [
   { fund: '§ 33 Abs. 2', titel: '25-%-Regel bei Technischen Anlagen',
     text: 'Die Kosten der Technischen Anlagen sind vollständig anrechenbar, soweit sie 25 % der sonstigen anrechenbaren Kosten nicht übersteigen; darüber hinaus nur zur Hälfte. Die App weist beide Teile getrennt aus.' },
   { fund: '§ 36', titel: 'Umbauzuschlag',
-    text: 'Für Umbauten und Modernisierungen kann ein Zuschlag vereinbart werden — bei Gebäuden und Innenräumen bis 33 %. Ohne schriftliche Vereinbarung gilt ein Zuschlag von 20 % ab Honorarzone II als vereinbart.' },
+    text: 'Für Umbauten und Modernisierungen kann in Textform ein Zuschlag vereinbart werden. Die Obergrenze hängt am Leistungsbild: Gebäude 33 % (§ 36 Abs. 1), Innenräume 50 % (§ 36 Abs. 2), Ingenieurbauwerke und Verkehrsanlagen 33 % (§ 44 Abs. 6, § 48 Abs. 6), Tragwerksplanung und Technische Ausrüstung 50 % (§ 52 Abs. 4, § 56 Abs. 5). Für Freianlagen ist kein Zuschlag vorgesehen.' },
 ];
 
-export async function hoaiZeigen(wurzel) {
+export async function hoaiZeigen(wurzel, sprungziel) {
   wurzel.append(
-    el('h1', { text: 'HOAI' }),
-    el('p', { class: 'unterzeile', text: 'Honorarordnung für Architekten und Ingenieure — die Werte, mit denen diese App rechnet.' }),
+    el('div', { class: 'seitenkopf' },
+      el('h1', { text: 'HOAI' }),
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#rechner'; } }, 'Zum Rechner'),
+    ),
+    el('p', { class: 'unterzeile', text: 'Honorarordnung für Architekten und Ingenieure — Volltext, Honorartafeln und die Werte, mit denen diese App rechnet.' }),
   );
+
+  // ── Volltext ──────────────────────────────────────────
+  // Wird erst hier geladen: die Verordnung ist rund 670 KB, und wer nur die
+  // Honorartafel nachschlagen will, soll das nicht mitbezahlen.
+  wurzel.append(el('div', { class: 'abschnitt' }, el('h2', { text: 'Volltext der Verordnung' })));
+  const volltextBox = el('div');
+  wurzel.append(volltextBox);
+  volltextZeigen(volltextBox, sprungziel).catch((f) => {
+    console.error(f);
+    volltextBox.append(el('p', { class: 'hinweis fehler', text: `Der Volltext ließ sich nicht laden: ${f.message}` }));
+  });
 
   // ── Regeln ────────────────────────────────────────────
   wurzel.append(el('div', { class: 'abschnitt' }, el('h2', { text: 'Die Vorschriften im Überblick' })));
@@ -50,14 +64,15 @@ export async function hoaiZeigen(wurzel) {
     el('dt', {}, el('span', { class: 'fund mono', text: r.fund }), el('span', { text: r.titel })),
     el('dd', { text: r.text }),
   ])));
-  wurzel.append(el('p', { class: 'klein', text: 'Zusammenfassungen mit Fundstelle, nicht der Wortlaut. Maßgeblich ist die Verordnung selbst.' }));
+  wurzel.append(el('p', { class: 'klein', text: 'Zusammenfassungen mit Fundstelle. Der Wortlaut steht oben im Volltext.' }));
 
   // ── Leistungsbilder und Phasen ────────────────────────
   wurzel.append(el('div', { class: 'abschnitt' }, el('h2', { text: 'Leistungsbilder und Leistungsphasen' })));
   const lbBox = el('div');
   const lbWahl = feld({
     label: 'Leistungsbild', art: 'auswahl', wert: 'gebaeude',
-    optionen: Object.entries(LEISTUNGSBILDER).map(([k, lb]) => ({ wert: k, text: lb.bezeichnung })),
+    optionen: Object.entries(LEISTUNGSBILDER).map(([k, lb]) =>
+      ({ wert: k, text: `${lb.leistungsbildParagraf} — ${lb.bezeichnung}` })),
     onAenderung: (w) => zeichneLeistungsbild(lbBox, w),
   });
   zeichneLeistungsbild(lbBox, 'gebaeude');
@@ -95,6 +110,61 @@ export async function hoaiZeigen(wurzel) {
   }
 }
 
+/**
+ * Volltext der Verordnung mit Suche.
+ *
+ * Die Norm wird als Ganzes gezeigt, nicht in Auszuegen: Wer im Streitfall eine
+ * Fundstelle braucht, braucht den Wortlaut, nicht meine Zusammenfassung.
+ */
+async function volltextZeigen(box, sprungziel) {
+  const { VERORDNUNG } = await import('../hoai/verordnung.js');
+  leeren(box);
+
+  const treffer = el('div');
+  const zeichnen = (suche) => {
+    leeren(treffer);
+    const s = (suche || '').trim().toLowerCase();
+    const liste = s
+      ? VERORDNUNG.normen.filter((n) =>
+        `${n.bezug} ${n.titel} ${n.text}`.toLowerCase().includes(s))
+      : VERORDNUNG.normen;
+
+    if (!liste.length) {
+      treffer.append(el('div', { class: 'leer' }, el('p', { text: 'Kein Treffer im Volltext.' })));
+      return;
+    }
+    treffer.append(el('p', { class: 'trefferzahl',
+      text: s ? `${liste.length} von ${VERORDNUNG.normen.length} Vorschriften` : `${liste.length} Vorschriften und Anlagen` }));
+
+    for (const n of liste) {
+      const offen = sprungziel && n.bezug.replace(/\s+/g, '') === String(sprungziel).replace(/\s+/g, '');
+      treffer.append(el('details', { class: 'norm', id: `norm-${n.bezug.replace(/\s+/g, '')}`, open: offen || !!s }),
+      );
+      const d = treffer.lastChild;
+      d.append(
+        el('summary', {},
+          el('span', { class: 'fund mono', text: n.bezug }),
+          el('span', { text: n.titel || '' })),
+        el('div', { class: 'normtext' }, ...n.text.split('\n').map((z) => el('p', { text: z }))),
+      );
+    }
+  };
+
+  box.append(
+    el('p', { class: 'klein', text: `${VERORDNUNG.fundstelle} · ${VERORDNUNG.stand.replace(/^Stand/, '')}. `
+      + 'Amtlicher Text von gesetze-im-internet.de; Verordnungen sind nach § 5 UrhG gemeinfrei.' }),
+    feld({ label: 'Im Volltext suchen', art: 'search', platzhalter: 'Umbauzuschlag, Interpolation, § 33 …',
+      onEingabe: (w) => zeichnen(w) }),
+    treffer,
+  );
+  zeichnen('');
+
+  if (sprungziel) {
+    const ziel = box.querySelector(`#norm-${String(sprungziel).replace(/\s+/g, '')}`);
+    if (ziel) ziel.scrollIntoView({ block: 'start' });
+  }
+}
+
 function zeichneLeistungsbild(box, schluessel) {
   leeren(box);
   const lb = LEISTUNGSBILDER[schluessel];
@@ -102,8 +172,12 @@ function zeichneLeistungsbild(box, schluessel) {
 
   const summe = Object.values(lb.phasen).reduce((s, x) => s + x, 0);
   box.append(
-    el('p', { class: 'klein', text: `Leistungsbild ${lb.leistungsbildParagraf} · Honorartafel ${lb.tafelParagraf}`
-      + (lb.umbauzuschlagBis ? ` · Umbauzuschlag bis ${prozent(lb.umbauzuschlagBis)}` : '') }),
+    el('h3', { text: `${lb.leistungsbildParagraf} — ${lb.bezeichnung}` }),
+    el('p', { class: 'klein', text: `Leistungsbild und Bewertung der Leistungsphasen: ${lb.leistungsbildParagraf}`
+      + ` · Honorartafel: ${lb.tafelParagraf}`
+      + (lb.umbauzuschlagBis
+        ? ` · Umbauzuschlag bis ${prozent(lb.umbauzuschlagBis)} (${lb.umbauzuschlagFundstelle})`
+        : ' · kein Umbauzuschlag vorgesehen') }),
     el('table', { class: 'tabelle' },
       el('thead', {}, el('tr', {},
         el('th', { text: 'LPh' }), el('th', { text: 'Bezeichnung' }), el('th', { class: 'r', text: 'Anteil' }))),
