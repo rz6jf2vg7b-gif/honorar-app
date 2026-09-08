@@ -7,9 +7,10 @@
 //              entsteht, der eine Pflichtangabe fehlt.
 //   Vorgaben — was der Assistent voreinstellt, damit man es nicht jedes Mal tippt.
 
-import { el, leeren, melden, feld, zahlZeigen, dateiSpeichern, dateiLaden, bestaetigen } from '../ui.js';
+import { el, leeren, melden, feld, farbfeld, bildLaden, zahlZeigen, dateiSpeichern, dateiLaden, bestaetigen } from '../ui.js';
 import { einstellungenLesen, einstellungenSchreiben, sicherungErstellen, sicherungEinspielen } from '../db.js';
 import { LEISTUNGSBILDER, HONORARSAETZE } from '../hoai/leistungsbilder.js';
+import { SCHRIFTEN } from '../beleg/cd.js';
 import {
   ibanFormatieren, ibanPruefen, bicFormatieren, bicPruefen,
   steuernummerFormatieren, steuernummerPruefen, ustIdFormatieren, ustIdPruefen,
@@ -40,10 +41,10 @@ export async function einstellungenZeigen(wurzel) {
     t('buero.funktion', 'Funktion', { platzhalter: 'z. B. M.A. Architektur · Freier Architekt' }),
     // Anschrift in Einzelfeldern — zusammengesetzte Felder laden dazu ein, Straße
     // und Hausnummer zu vertauschen; das faellt erst auf dem Beleg auf.
-    el('div', { class: 'anschrift-reihe' },
+    el('div', { class: 'reihe-strasse' },
       t('buero.strasse', 'Straße'),
       t('buero.hausnummer', 'Nr.')),
-    el('div', { class: 'anschrift-reihe' },
+    el('div', { class: 'reihe-plzort' },
       t('buero.plz', 'PLZ', { inputmode: 'numeric' }),
       t('buero.ort', 'Ort')),
     t('buero.land', 'Länderkürzel', {
@@ -104,7 +105,33 @@ export async function einstellungenZeigen(wurzel) {
       t('cd.wortmarkeFett', 'fett'),
       t('cd.wortmarkeEnde', 'mager')),
     t('cd.disziplin', 'Disziplinzeile', { platzhalter: 'ARCHITEKTUR · STADTENTWICKLUNG' }),
-    t('cd.akzent', 'Akzentfarbe', { art: 'color' }),
+
+    (f['cd.akzent'] = farbfeld({
+      label: 'Akzentfarbe', wert: e.cd.akzent,
+      hinweis: 'Kicker, Belegnummer und Summenzeile. Als Hexwert eingebbar — die Hausfarbe steht im Styleguide, nicht im Farbkreis.',
+    })),
+
+    (f['cd.schrift'] = feld({
+      label: 'Schriftart', art: 'auswahl', wert: e.cd.schrift,
+      optionen: Object.entries(SCHRIFTEN).map(([k, s]) => ({ wert: k, text: s.bezeichnung })),
+      hinweis: SCHRIFTEN[e.cd.schrift]?.hinweis || '',
+      onAenderung: (w) => {
+        const box = f['cd.schrift'];
+        const h = box.querySelector('.hinweis');
+        if (h) h.textContent = SCHRIFTEN[w]?.hinweis || '';
+        const probe = document.getElementById('schriftprobe');
+        if (probe) probe.style.fontFamily = SCHRIFTEN[w]?.familie || '';
+      },
+    })),
+    el('div', { class: 'schriftprobe', id: 'schriftprobe',
+      style: `font-family:${SCHRIFTEN[e.cd.schrift]?.familie || ''}` },
+      el('div', { class: 'probe-gross', text: 'Honorarrechnung' }),
+      el('div', { class: 'probe-klein', text: 'Grundhonorar nach § 35 HOAI · Leistungsphasen 1–8 · 549.363,61 €' })),
+    el('p', { class: 'klein', text: 'Nur Schriften, die auf dem Gerät bereits vorhanden sind. Eine Schrift von Google Fonts nachzuladen würde bei jedem Öffnen eines Belegs die IP-Adresse des Empfängers an Google übertragen — das LG München I hat das am 20.01.2022 als DSGVO-Verstoß gewertet.' }),
+
+    el('h3', { text: 'Logo' }),
+    el('p', { class: 'klein', text: 'Ein Logo ersetzt die Wortmarke im Belegkopf. Es wird in den Beleg eingebettet und liegt nur auf diesem Gerät — nichts wird nachgeladen. PNG, SVG, JPEG oder WebP, höchstens 400 KB.' }),
+    logoBlock(),
 
     el('h2', { text: 'Vorgaben für neue Belege' }),
     el('div', { class: 'feldreihe' },
@@ -151,6 +178,14 @@ export async function einstellungenZeigen(wurzel) {
       el('button', { class: 'knopf akzent', onclick: speichern }, 'Speichern'),
     ),
 
+    el('h2', { text: 'Nachschlagen' }),
+    el('p', { class: 'klein', text: 'Auf dem Mac stehen diese drei auch unten in der Seitenleiste.' }),
+    el('div', { class: 'knopfreihe' },
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hilfe'; } }, 'Hilfe'),
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hoai'; } }, 'HOAI'),
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#vorlagen'; } }, 'Dokumentvorlagen'),
+    ),
+
     el('h2', { text: 'Sicherung' }),
     el('p', { class: 'klein', text: 'Die Daten liegen auf diesem Gerät. Eine Sicherung enthält Einstellungen, Stammdaten, Verträge und alle Belege.' }),
     el('div', { class: 'knopfreihe' },
@@ -159,10 +194,60 @@ export async function einstellungenZeigen(wurzel) {
     ),
   );
 
+  /**
+   * Zeigt das hinterlegte Logo und erlaubt Austausch und Entfernen.
+   *
+   * Das Bild wird als Data-URL in den Einstellungen gehalten. 400 KB sind die
+   * Grenze: Darueber blaeht es jede Sicherung und jeden Beleg auf, und ein
+   * Briefkopflogo braucht nicht mehr.
+   */
+  function logoBlock() {
+    const box = el('div', { class: 'logoblock' });
+    const zeichnen = () => {
+      leeren(box);
+      const hat = !!e.cd.logo;
+      box.append(
+        el('div', { class: `logovorschau ${hat ? '' : 'leer'}` },
+          hat ? el('img', { src: e.cd.logo, alt: 'Hinterlegtes Logo' })
+            : el('span', { class: 'klein', text: 'Kein Logo — der Belegkopf nutzt die Wortmarke.' })),
+        el('div', { class: 'knopfreihe' },
+          el('button', { class: 'knopf zweit', type: 'button', onclick: waehlen },
+            hat ? 'Logo austauschen' : 'Logo hochladen'),
+          hat ? el('button', { class: 'knopf leise', type: 'button', onclick: entfernen }, 'Entfernen') : null,
+        ),
+        hat && e.cd.logoName
+          ? el('p', { class: 'klein mono', text: `${e.cd.logoName} · ${Math.round(e.cd.logo.length / 1366)} KB` })
+          : null,
+      );
+    };
+    async function waehlen() {
+      const d = await bildLaden();
+      if (!d) return;
+      if (d.groesse > 400 * 1024) {
+        melden(`Das Bild ist ${Math.round(d.groesse / 1024)} KB groß — höchstens 400 KB.`, 'fehler');
+        return;
+      }
+      e.cd.logo = d.datenUrl;
+      e.cd.logoName = d.name;
+      zeichnen();
+      melden('Logo übernommen — noch nicht gespeichert.');
+    }
+    async function entfernen() {
+      if (!await bestaetigen('Logo entfernen?', 'Der Belegkopf nutzt danach wieder die Wortmarke.')) return;
+      e.cd.logo = ''; e.cd.logoName = '';
+      zeichnen();
+    }
+    zeichnen();
+    return box;
+  }
+
   async function speichern() {
     const neu = {
       buero: {}, cd: {}, vorgaben: {},
     };
+    // Logo und Logoname haengen an keinem Eingabefeld, sondern am Block darueber.
+    neu.cd.logo = e.cd.logo || '';
+    neu.cd.logoName = e.cd.logoName || '';
     for (const [schluessel, box] of Object.entries(f)) {
       const [gruppe, name] = schluessel.split('.');
       const eing = box.eingabe;

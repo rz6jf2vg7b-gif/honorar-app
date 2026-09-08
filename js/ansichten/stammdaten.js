@@ -1,4 +1,8 @@
-// Stammdaten: Projekte und Empfaenger.
+// Stammdaten: Projekte und Kontakte — zwei getrennte Seiten.
+//
+// Zusammen auf einer Seite waren sie unuebersichtlich: 157 Projekte und 1.149
+// Kontakte untereinander, jeweils mit eigenem Suchfeld, dazwischen die
+// Import-Knoepfe. Getrennt hat jede Seite genau eine Aufgabe.
 //
 // Zwei Quellen, bewusst gleichberechtigt:
 //   untermStrich — ueber die Datei, die tools/ustrich_export.py erzeugt. Ein
@@ -13,80 +17,157 @@
 import { el, leeren, melden, feld, dateiLaden, bestaetigen } from '../ui.js';
 import { SPEICHER, alle, schreiben, schreibeViele, loeschen, neueId } from '../db.js';
 
-export async function stammdatenZeigen(wurzel) {
+// ————————————————————————————————————————————————————————————————
+// Projekte
+// ————————————————————————————————————————————————————————————————
+
+export async function projekteZeigen(wurzel) {
   const zeichnen = async () => {
     leeren(wurzel);
-    const [projekte, adressen] = await Promise.all([alle(SPEICHER.PROJEKTE), alle(SPEICHER.ADRESSEN)]);
+    const projekte = await alle(SPEICHER.PROJEKTE);
+    const eigene = projekte.filter((p) => p.quelle === 'eigen').length;
 
     wurzel.append(
-      el('h1', { text: 'Stammdaten' }),
-      el('p', { class: 'unterzeile', text: 'Projekte und Empfänger — aus untermStrich geladen oder selbst angelegt.' }),
-
-      el('h2', { text: 'Aus untermStrich laden' }),
-      el('p', { class: 'klein', text: 'Zuerst auf dem Mac ausführen: python3 tools/ustrich_export.py — das schreibt projekte.json und adressen.json nach OneDrive/Apps/HonorarApp/stammdaten/. Danach die Datei hier laden.' }),
-      el('div', { class: 'knopfreihe' },
-        el('button', { class: 'knopf zweit', onclick: () => einspielen('projekte', zeichnen) }, 'Projekte laden'),
-        el('button', { class: 'knopf zweit', onclick: () => einspielen('adressen', zeichnen) }, 'Adressen laden'),
-      ),
-
-      el('h2', { text: `Projekte (${projekte.length})` }),
-      projekte.length
-        ? suchbareListe(projekte, 'Projekt suchen',
-          (p) => `${p.nummer} ${p.name} ${p.kuerzel || ''}`,
-          (p) => p.name,
-          (p) => `${p.nummer}${p.kuerzel ? ` · ${p.kuerzel}` : ''}${p.aktiv ? ' · aktiv' : ''}${p.quelle === 'eigen' ? ' · eigen' : ''}`,
-          (p) => { location.hash = `#projekt/${p.id}`; })
-        : el('div', { class: 'leer' }, el('p', { class: 'klein', text: 'Noch keine Projekte.' })),
-      el('div', { class: 'knopfreihe' },
-        el('button', { class: 'knopf leise', onclick: () => projektBearbeiten(null, zeichnen) }, 'Projekt anlegen'),
-      ),
-
-      el('h2', { text: `Empfänger (${adressen.length})` }),
-      adressen.length
-        ? suchbareListe(adressen, 'Empfänger suchen',
-          (a) => `${a.name} ${a.zusatz || ''} ${a.ort || ''} ${a.plz || ''}`,
-          (a) => a.name,
-          (a) => [a.zusatz, `${a.plz || ''} ${a.ort || ''}`.trim(), a.quelle === 'eigen' ? 'eigen' : null].filter(Boolean).join(' · '),
-          (a) => { location.hash = `#adresse/${a.id}`; })
-        : el('div', { class: 'leer' }, el('p', { class: 'klein', text: 'Noch keine Empfänger.' })),
-      el('div', { class: 'knopfreihe' },
-        el('button', { class: 'knopf leise', onclick: () => adresseBearbeiten(null, zeichnen) }, 'Empfänger anlegen'),
-      ),
+      el('h1', { text: 'Projekte' }),
+      el('p', { class: 'unterzeile', text: herkunft(projekte.length, eigene, 'Projekt', 'Projekte') }),
+      listenSeite({
+        eintraege: projekte,
+        suchLabel: 'Projekt suchen',
+        platzhalter: 'Nummer, Name, Kürzel …',
+        neuText: 'Projekt anlegen',
+        onNeu: () => projektBearbeiten(null, zeichnen),
+        onLaden: () => einspielen('projekte', zeichnen),
+        suchtextVon: (p) => `${p.nummer} ${p.name} ${p.kuerzel || ''}`,
+        titelVon: (p) => p.name,
+        nebenVon: (p) => [
+          p.nummer,
+          p.kuerzel,
+          p.aktiv ? 'aktiv' : null,
+          p.quelle === 'eigen' ? 'eigen' : null,
+        ].filter(Boolean).join(' · '),
+        onKlick: (p) => { location.hash = `#projekt/${p.id}`; },
+        leerText: 'Noch keine Projekte.',
+      }),
     );
   };
   await zeichnen();
 }
 
+// ————————————————————————————————————————————————————————————————
+// Kontakte
+// ————————————————————————————————————————————————————————————————
+
+export async function kontakteZeigen(wurzel) {
+  const zeichnen = async () => {
+    leeren(wurzel);
+    const adressen = await alle(SPEICHER.ADRESSEN);
+    const eigene = adressen.filter((a) => a.quelle === 'eigen').length;
+
+    wurzel.append(
+      el('h1', { text: 'Kontakte' }),
+      el('p', { class: 'unterzeile', text: herkunft(adressen.length, eigene, 'Kontakt', 'Kontakte') }),
+      listenSeite({
+        eintraege: adressen,
+        suchLabel: 'Kontakt suchen',
+        platzhalter: 'Name, Ansprechpartner, Ort, Notiz …',
+        neuText: 'Kontakt anlegen',
+        onNeu: () => adresseBearbeiten(null, zeichnen),
+        onLaden: () => einspielen('adressen', zeichnen),
+        // Gesucht wird ueber alles, was einen Kontakt wiederfindbar macht — nicht
+        // nur ueber den Firmennamen. Wer "Hanz" sucht, meint den
+        // Ansprechpartner; wer "Insolvenz" sucht, meint die Notiz.
+        suchtextVon: (a) => [
+          a.name, a.zusatz, a.ansprechpartner, a.strasse, a.adresszeile2,
+          a.plz, a.ort, a.mail, a.telefon, a.telefon2, a.notiz,
+          ...(a.kategorien || []),
+        ].filter(Boolean).join(' '),
+        titelVon: (a) => a.name,
+        nebenVon: (a) => [
+          a.ansprechpartner ? `${a.anrede || ''} ${a.ansprechpartner}`.trim() : null,
+          a.zusatz,
+          `${a.plz || ''} ${a.ort || ''}`.trim() || null,
+          a.quelle === 'eigen' ? 'eigen' : null,
+        ].filter(Boolean).join(' · '),
+        markeVon: (a) => (a.kategorien || [])[0] || null,
+        onKlick: (a) => { location.hash = `#adresse/${a.id}`; },
+        leerText: 'Noch keine Kontakte.',
+      }),
+    );
+  };
+  await zeichnen();
+}
+
+const herkunft = (gesamt, eigene, ein, viele) => {
+  if (!gesamt) return `Noch keine ${viele} — aus untermStrich laden oder selbst anlegen.`;
+  const ausUs = gesamt - eigene;
+  const teile = [];
+  if (ausUs) teile.push(`${ausUs} aus untermStrich`);
+  if (eigene) teile.push(`${eigene} selbst angelegt`);
+  return `${gesamt} ${gesamt === 1 ? ein : viele} — ${teile.join(' · ')}.`;
+};
+
+// ————————————————————————————————————————————————————————————————
+// Gemeinsame Liste
+// ————————————————————————————————————————————————————————————————
+
 /**
- * Liste mit Suchfeld. Bei ueber tausend Adressen ist Blaettern keine Option —
- * und eine auf 200 gekuerzte Liste ohne Suche laesst den Rest unauffindbar.
+ * Suchfeld, Knoepfe und Trefferliste als ein Block.
+ *
+ * Bei ueber tausend Kontakten ist Blaettern keine Option — und eine auf 60
+ * gekuerzte Liste ohne Suche laesst den Rest unauffindbar. Deshalb steht die
+ * Suche oben und die Knoepfe daneben statt darunter: Man sucht viel oefter, als
+ * man anlegt.
  */
-function suchbareListe(eintraege, suchLabel, suchtextVon, titelVon, nebenVon, onKlick) {
+function listenSeite(o) {
   const MAX = 60;
   const box = el('div');
+
   const zeichnen = (suche) => {
     leeren(box);
     const s = (suche || '').trim().toLowerCase();
     const treffer = s
-      ? eintraege.filter((e) => suchtextVon(e).toLowerCase().includes(s))
-      : eintraege;
-    box.append(el('ul', { class: 'liste' }, ...treffer.slice(0, MAX).map((e) => el('li', {},
-      el('button', { class: 'eintrag', type: 'button', onclick: () => onKlick(e) },
-        el('div', { class: 'haupt' },
-          el('div', { class: 'titel', text: titelVon(e) }),
-          el('div', { class: 'neben', text: nebenVon(e) })),
-        el('div', { class: 'neben', text: '›' }),
-      )))));
-    if (!treffer.length) box.append(el('div', { class: 'leer' }, el('p', { class: 'klein', text: 'Kein Treffer.' })));
-    else if (treffer.length > MAX) {
-      box.append(el('p', { class: 'klein', text: `${treffer.length} Treffer — die ersten ${MAX} werden gezeigt. Suche verfeinern.` }));
+      ? o.eintraege.filter((e) => o.suchtextVon(e).toLowerCase().includes(s))
+      : o.eintraege;
+
+    if (!o.eintraege.length) {
+      box.append(el('div', { class: 'leer' }, el('p', { class: 'klein', text: o.leerText })));
+      return;
     }
+    if (!treffer.length) {
+      box.append(el('div', { class: 'leer' },
+        el('p', { text: 'Kein Treffer.' }),
+        el('p', { class: 'klein', text: 'Gesucht wird über alle Felder — auch Ansprechpartner, Notiz und Kategorie.' })));
+      return;
+    }
+
+    box.append(
+      el('p', { class: 'trefferzahl', text: treffer.length > MAX
+        ? `${treffer.length} Treffer — die ersten ${MAX}. Suche verfeinern.`
+        : `${treffer.length} ${treffer.length === 1 ? 'Treffer' : 'Treffer'}` }),
+      el('ul', { class: 'liste' }, ...treffer.slice(0, MAX).map((e) => el('li', {},
+        el('button', { class: 'eintrag', type: 'button', onclick: () => o.onKlick(e) },
+          el('div', { class: 'haupt' },
+            el('div', { class: 'titel', text: o.titelVon(e) }),
+            el('div', { class: 'neben', text: o.nebenVon(e) })),
+          o.markeVon?.(e) ? el('span', { class: 'marke', text: o.markeVon(e) }) : null,
+          el('span', { class: 'pfeil', text: '›' }),
+        )))),
+    );
   };
   zeichnen('');
+
   return el('div', {},
-    feld({ label: suchLabel, art: 'search', platzhalter: 'Suchen …', onEingabe: (w) => zeichnen(w) }),
+    el('div', { class: 'listenkopf' },
+      feld({ label: o.suchLabel, art: 'search', platzhalter: o.platzhalter, onEingabe: (w) => zeichnen(w) }),
+      el('button', { class: 'knopf zweit', type: 'button', onclick: o.onNeu }, o.neuText),
+      el('button', { class: 'knopf leise', type: 'button', onclick: o.onLaden }, 'Aus Datei laden'),
+    ),
     box);
 }
+
+// ————————————————————————————————————————————————————————————————
+// Einspielen
+// ————————————————————————————————————————————————————————————————
 
 async function einspielen(art, danach) {
   const datei = await dateiLaden('.json');
@@ -113,13 +194,17 @@ async function einspielen(art, danach) {
     });
   }
   await schreibeViele(speicher, zuSchreiben);
-  melden(`${zuSchreiben.length} ${art === 'projekte' ? 'Projekte' : 'Adressen'} übernommen.`);
+  melden(`${zuSchreiben.length} ${art === 'projekte' ? 'Projekte' : 'Kontakte'} übernommen.`);
   danach();
 }
 
 const schluessel = (e, art) => (art === 'projekte'
   ? `${e.nummer || ''}|${e.name || ''}`
-  : `${e.name || ''}|${e.plz || ''}|${e.strasse || ''}`);
+  : `${e.name || ''}|${e.plz || ''}|${e.strasse || ''}|${e.ansprechpartner || ''}`);
+
+// ————————————————————————————————————————————————————————————————
+// Bearbeiten
+// ————————————————————————————————————————————————————————————————
 
 export function projektBearbeiten(projekt, danach) {
   const f = {
@@ -150,20 +235,35 @@ export function projektBearbeiten(projekt, danach) {
 }
 
 export function adresseBearbeiten(adresse, danach) {
+  // Die Strasse bleibt bewusst EIN Feld, anders als beim eigenen Buero: In
+  // untermStrich steht die Hausnummer bei 1.074 von 1.149 Kontakten mit in der
+  // Strasse. Sie beim Einspielen abzutrennen hiesse raten — und ein falsch
+  // geratener Trenner faellt erst auf dem Briefumschlag auf.
   const f = {
     name: feld({ label: 'Name / Firma', wert: adresse?.name || '' }),
-    zusatz: feld({ label: 'Zusatz / z. Hd.', wert: adresse?.zusatz || '' }),
-    strasse: feld({ label: 'Straße', wert: adresse?.strasse || '' }),
-    plz: feld({ label: 'PLZ', wert: adresse?.plz || '' }),
+    zusatz: feld({ label: 'Firmenzusatz', wert: adresse?.zusatz || '', hinweis: 'z. B. Rechtsanwälte, Steuerberatung' }),
+    anrede: feld({ label: 'Anrede', art: 'auswahl', wert: adresse?.anrede || '',
+      optionen: [{ wert: '', text: '—' }, 'Herr', 'Frau', 'Firma'] }),
+    ansprechpartner: feld({ label: 'Ansprechpartner', wert: adresse?.ansprechpartner || '' }),
+    strasse: feld({ label: 'Straße und Nr.', wert: adresse?.strasse || '' }),
+    zeile2: feld({ label: 'Zweite Adresszeile', wert: adresse?.adresszeile2 || '', hinweis: 'z. B. c/o, Gebäude, Zimmer' }),
+    plz: feld({ label: 'PLZ', wert: adresse?.plz || '', inputmode: 'numeric' }),
     ort: feld({ label: 'Ort', wert: adresse?.ort || '' }),
     mail: feld({ label: 'E-Mail', art: 'email', wert: adresse?.mail || '' }),
+    telefon: feld({ label: 'Telefon', wert: adresse?.telefon || '' }),
+    notiz: feld({ label: 'Interne Notiz', art: 'mehrzeilig', zeilen: 2, wert: adresse?.notiz || '',
+      hinweis: 'Nur zum Wiederfinden — steht nie auf einem Beleg.' }),
     leitweg: feld({
       label: 'Leitweg-ID', wert: adresse?.leitwegId || '',
       hinweis: 'Nur bei öffentlichen Auftraggebern — ohne sie wird eine XRechnung abgewiesen.',
     }),
   };
-  dialog(adresse ? 'Empfänger bearbeiten' : 'Empfänger anlegen',
-    [f.name, f.zusatz, f.strasse, el('div', { class: 'feldreihe' }, f.plz, f.ort), f.mail, f.leitweg],
+  dialog(adresse ? 'Kontakt bearbeiten' : 'Kontakt anlegen',
+    [f.name, f.zusatz,
+      el('div', { class: 'reihe-plzort' }, f.anrede, f.ansprechpartner),
+      f.strasse, f.zeile2,
+      el('div', { class: 'reihe-plzort' }, f.plz, f.ort),
+      f.mail, f.telefon, f.notiz, f.leitweg],
     async () => {
       const name = f.name.eingabe.value.trim();
       if (!name) { melden('Der Name fehlt.', 'fehler'); return false; }
@@ -172,26 +272,31 @@ export function adresseBearbeiten(adresse, danach) {
         id: adresse?.id || neueId('a'),
         name,
         zusatz: f.zusatz.eingabe.value.trim(),
+        anrede: f.anrede.eingabe.value,
+        ansprechpartner: f.ansprechpartner.eingabe.value.trim(),
         strasse: f.strasse.eingabe.value.trim(),
+        adresszeile2: f.zeile2.eingabe.value.trim(),
         plz: f.plz.eingabe.value.trim(),
         ort: f.ort.eingabe.value.trim(),
         mail: f.mail.eingabe.value.trim(),
+        telefon: f.telefon.eingabe.value.trim(),
+        notiz: f.notiz.eingabe.value.trim(),
         leitwegId: f.leitweg.eingabe.value.trim(),
         quelle: adresse?.quelle || 'eigen',
       });
       melden('Gespeichert.'); danach(); return true;
     },
     adresse ? async () => {
-      if (!await bestaetigen('Empfänger entfernen?')) return false;
+      if (!await bestaetigen('Kontakt entfernen?')) return false;
       await loeschen(SPEICHER.ADRESSEN, adresse.id);
       melden('Entfernt.'); danach(); return true;
     } : null);
 }
 
 function dialog(titel, felder, onSpeichern, onLoeschen) {
-  const dlg = el('dialog', { class: 'karte', style: 'max-width:480px;width:92%;' },
+  const dlg = el('dialog', { class: 'karte dialog', style: 'max-width:520px;width:92%;' },
     el('h3', { text: titel }),
-    ...felder,
+    el('div', { class: 'dialoginhalt' }, ...felder),
     el('div', { class: 'knopfreihe' },
       el('button', { class: 'knopf zweit', type: 'button', onclick: () => dlg.close() }, 'Abbrechen'),
       onLoeschen ? el('button', {

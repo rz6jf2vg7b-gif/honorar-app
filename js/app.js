@@ -11,10 +11,19 @@ import { einstellungenLesen } from './db.js';
 // `kurz` ist die Beschriftung der Tab-Leiste auf dem Telefon — dort ist neben
 // drei weiteren Zielen kein Platz fuer "Einstellungen".
 const ANSICHTEN = [
-  { weg: 'dashboard', text: 'Dashboard', kurz: 'Übersicht', symbol: SYMBOL.belege },
+  { weg: 'dashboard', text: 'Dashboard', kurz: 'Übersicht', symbol: SYMBOL.dashboard },
   { weg: 'neu', text: 'Neu', kurz: 'Neu', symbol: SYMBOL.neu },
-  { weg: 'stammdaten', text: 'Stammdaten', kurz: 'Daten', symbol: SYMBOL.stammdaten },
+  { weg: 'projekte', text: 'Projekte', kurz: 'Projekte', symbol: SYMBOL.projekte },
+  { weg: 'kontakte', text: 'Kontakte', kurz: 'Kontakte', symbol: SYMBOL.kontakte },
   { weg: 'einstellungen', text: 'Einstellungen', kurz: 'Mehr', symbol: SYMBOL.einstellungen },
+];
+
+// Steht abgesetzt am Fuss der Seitenleiste, nicht in der Tab-Leiste: Auf dem
+// Telefon waere ein sechstes Ziel zu viel, und die Hilfe schlaegt man nach —
+// man arbeitet nicht darin.
+const NEBENANSICHTEN = [
+  { weg: 'hilfe', text: 'Hilfe', symbol: SYMBOL.hilfe },
+  { weg: 'hoai', text: 'HOAI', symbol: SYMBOL.buch },
 ];
 
 const inhalt = document.getElementById('inhalt');
@@ -34,6 +43,11 @@ function navigationBauen(aktiv) {
       ...auswahl, 'aria-current': dran ? 'page' : null, 'aria-label': a.text,
     }, symbol(a.symbol), el('span', { text: a.kurz || a.text })));
   }
+  seitenleiste.append(el('div', { class: 'leistenfuss' }, ...NEBENANSICHTEN.map((a) =>
+    el('button', {
+      class: 'leise', onclick: () => { location.hash = `#${a.weg}`; },
+      'aria-current': aktiv === a.weg ? 'page' : null,
+    }, symbol(a.symbol), el('span', { text: a.text })))));
 }
 
 async function markeSetzen() {
@@ -45,7 +59,11 @@ async function markeSetzen() {
 async function leiten() {
   const roh = (location.hash || '#dashboard').slice(1);
   const [weg, wert] = roh.split('/');
-  const bereich = { beleg: 'dashboard', belege: 'dashboard', projekt: 'stammdaten', adresse: 'stammdaten' }[weg] || weg;
+  const bereich = {
+    beleg: 'dashboard', belege: 'dashboard',
+    projekt: 'projekte', adresse: 'kontakte', stammdaten: 'projekte',
+    vorlagen: 'einstellungen',
+  }[weg] || weg;
   navigationBauen(bereich);
   leeren(inhalt);
   inhalt.scrollTop = 0;
@@ -67,9 +85,21 @@ async function leiten() {
     } else if (weg === 'adresse') {
       const { adresseAnsehen } = await import('./ansichten/stammdatenDetail.js');
       await adresseAnsehen(inhalt, wert);
-    } else if (weg === 'stammdaten') {
-      const { stammdatenZeigen } = await import('./ansichten/stammdaten.js');
-      await stammdatenZeigen(inhalt);
+    } else if (weg === 'projekte' || weg === 'stammdaten') {
+      const { projekteZeigen } = await import('./ansichten/stammdaten.js');
+      await projekteZeigen(inhalt);
+    } else if (weg === 'kontakte') {
+      const { kontakteZeigen } = await import('./ansichten/stammdaten.js');
+      await kontakteZeigen(inhalt);
+    } else if (weg === 'hilfe') {
+      const { hilfeZeigen } = await import('./ansichten/hilfe.js');
+      await hilfeZeigen(inhalt);
+    } else if (weg === 'hoai') {
+      const { hoaiZeigen } = await import('./ansichten/hoai.js');
+      await hoaiZeigen(inhalt, wert);
+    } else if (weg === 'vorlagen') {
+      const { vorlagenZeigen } = await import('./ansichten/vorlagen.js');
+      await vorlagenZeigen(inhalt);
     } else if (weg === 'einstellungen') {
       const { einstellungenZeigen } = await import('./ansichten/einstellungen.js');
       await einstellungenZeigen(inhalt);

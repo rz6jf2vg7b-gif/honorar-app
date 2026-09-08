@@ -125,6 +125,53 @@ export const CD_NEUTRAL = {
   },
 };
 
+/**
+ * Waehlbare Schriften.
+ *
+ * ⚠️ Ausschliesslich Schriften, die auf den Geraeten bereits vorhanden sind.
+ * Eine Web-Schrift von Google Fonts oder einem CDN nachzuladen wuerde bei jedem
+ * Oeffnen eines Belegs die IP-Adresse des Betrachters an den Anbieter
+ * uebertragen — das LG Muenchen I hat genau das am 20.01.2022 (Az. 3 O 17493/20)
+ * als DSGVO-Verstoss gewertet und Schadenersatz zugesprochen. Ausserdem sieht
+ * ein Beleg ohne Netz sonst anders aus als mit. Deshalb: keine externen
+ * Schriften, auch nicht als Angebot.
+ *
+ * Jeder Eintrag nennt mehrere Ausweichschriften — eine Rechnung darf nie an
+ * einer fehlenden Schrift scheitern.
+ */
+export const SCHRIFTEN = {
+  system: {
+    bezeichnung: 'System (serifenlos)',
+    hinweis: 'Nimmt die Schrift des jeweiligen Geräts — San Francisco, Segoe UI, Roboto.',
+    familie: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    mono: 'ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace',
+  },
+  geist: {
+    bezeichnung: 'Geist',
+    hinweis: 'Die Hausschrift von kreativLABOR42. Ist sie nicht installiert, greift die Systemschrift.',
+    familie: 'Geist, "Segoe UI", Inter, "Helvetica Neue", Helvetica, Arial, sans-serif',
+    mono: '"IBM Plex Mono", Consolas, Menlo, "Courier New", monospace',
+  },
+  helvetica: {
+    bezeichnung: 'Helvetica / Arial',
+    hinweis: 'Die nüchterne Wahl — auf jedem Rechner und Drucker vorhanden.',
+    familie: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    mono: 'Menlo, Consolas, "Courier New", monospace',
+  },
+  georgia: {
+    bezeichnung: 'Georgia (Serife)',
+    hinweis: 'Serifenschrift — wirkt auf Papier ruhiger und traditioneller.',
+    familie: 'Georgia, "Times New Roman", Times, serif',
+    mono: 'Menlo, Consolas, "Courier New", monospace',
+  },
+  palatino: {
+    bezeichnung: 'Palatino (Serife)',
+    hinweis: 'Breitere Serifenschrift mit viel Ruhe in langen Herleitungen.',
+    familie: 'Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif',
+    mono: 'Menlo, Consolas, "Courier New", monospace',
+  },
+};
+
 /** Fuellt fehlende Angaben eines Teil-CD mit der Voreinstellung auf. */
 export function cdVervollstaendigen(cd) {
   const v = CD_KREATIVLABOR42;

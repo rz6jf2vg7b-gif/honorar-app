@@ -77,7 +77,7 @@ function bausteinHtml(b) {
 /**
  * @param {object} d
  * @param {object} d.buero        Absenderdaten
- * @param {object} d.empfaenger   {name, zusatz?, strasse, plzOrt}
+ * @param {object} d.empfaenger   {name, zusatz?, ansprechpartner?, zeile2?, strasse, plzOrt}
  * @param {object} d.projekt      {nummer, name, kuerzel?, vorhaben?}
  * @param {object} d.abrechnung   Ergebnis aus erstelleAbrechnung()
  * @param {Array}  d.ermittlungen Ergebnisse aus honorarermittlung()
@@ -190,6 +190,8 @@ export function rechnungHtml(d) {
     <address>
       ${h(d.empfaenger.name)}<br>
       ${d.empfaenger.zusatz ? h(d.empfaenger.zusatz) + '<br>' : ''}
+      ${d.empfaenger.ansprechpartner ? h(d.empfaenger.ansprechpartner) + '<br>' : ''}
+      ${d.empfaenger.zeile2 ? h(d.empfaenger.zeile2) + '<br>' : ''}
       ${h(d.empfaenger.strasse)}<br>
       ${h(d.empfaenger.plzOrt)}
     </address>

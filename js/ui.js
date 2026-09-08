@@ -255,8 +255,15 @@ export function dateiLaden(endungen = '.json') {
 
 /** Symbole der Navigation — schlichte Strichzeichnungen. */
 export const SYMBOL = {
+  // Dashboard: liegende Balken — dasselbe Bild wie die Balken auf der Seite
+  // selbst. Vorher stand hier das Belegsymbol, was die Seite als Liste auswies.
+  dashboard: 'M4 6h10M4 12h16M4 18h6M4 3v18',
   belege: 'M6 3h9l5 5v13H6zM15 3v5h5M9 13h7M9 17h7',
   neu: 'M12 5v14M5 12h14',
+  projekte: 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z',
+  kontakte: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
+  hilfe: 'M12 21a9 9 0 100-18 9 9 0 000 18zM9.5 9.5a2.5 2.5 0 114 2c-.9.7-1.5 1.3-1.5 2.5M12 17.5v.01',
+  buch: 'M4 5a2 2 0 012-2h13v18H6a2 2 0 01-2-2zM8 7h8M8 11h8M8 15h5',
   stammdaten: 'M4 6h16M4 12h16M4 18h10',
   einstellungen: 'M12 15a3 3 0 100-6 3 3 0 000 6z M19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5c.1-.3.1-.7.1-1z',
 };
@@ -269,4 +276,80 @@ export function symbol(pfad) {
   p.setAttribute('d', pfad);
   svg.append(p);
   return svg;
+}
+
+// ————————————————————————————————————————————————————————————————
+// Farbfeld — Waehler und Hexwert gekoppelt
+// ————————————————————————————————————————————————————————————————
+
+/**
+ * Der Farbwaehler allein genuegt nicht: Eine Hausfarbe ist als Hexwert
+ * festgelegt und wird aus dem Styleguide abgeschrieben, nicht im Farbkreis
+ * gesucht. Deshalb beides nebeneinander, in beide Richtungen gekoppelt.
+ */
+export function farbfeld(o) {
+  const id = `f_${Math.random().toString(36).slice(2, 9)}`;
+  const waehler = el('input', { id, type: 'color' });
+  const hex = el('input', {
+    type: 'text', class: 'mono hexfeld', maxlength: 7,
+    spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off',
+  });
+
+  const normieren = (t) => {
+    let s = String(t || '').trim().replace(/^#/, '').replace(/[^0-9a-fA-F]/g, '').toLowerCase();
+    if (s.length === 3) s = s.split('').map((c) => c + c).join('');   // #abc -> #aabbcc
+    return s.length === 6 ? `#${s}` : null;
+  };
+
+  const setzen = (wert) => {
+    const g = normieren(wert) || '#000000';
+    waehler.value = g;
+    hex.value = g;
+  };
+  setzen(o.wert);
+
+  waehler.addEventListener('input', () => { hex.value = waehler.value; });
+  hex.addEventListener('input', () => {
+    const g = normieren(hex.value);
+    if (g) waehler.value = g;
+  });
+  // Erst beim Verlassen aufraeumen — sonst kaeme einem die Eingabe abhanden,
+  // waehrend man noch tippt.
+  hex.addEventListener('blur', () => setzen(hex.value || waehler.value));
+
+  const box = el('div', { class: 'feld' },
+    el('label', { for: id, text: o.label }),
+    el('div', { class: 'farbreihe' }, waehler, hex),
+    o.hinweis ? el('div', { class: 'hinweis', text: o.hinweis }) : null,
+  );
+  // Nach aussen verhaelt es sich wie ein einzelnes Feld.
+  box.eingabe = waehler;
+  return box;
+}
+
+/**
+ * Eine Datei einlesen und als Data-URL zurueckgeben.
+ * @returns {Promise<{name:string, typ:string, groesse:number, datenUrl:string}|null>}
+ */
+export function bildLaden(erlaubt = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']) {
+  return new Promise((res) => {
+    const inp = el('input', { type: 'file', accept: erlaubt.join(','), style: 'display:none' });
+    inp.addEventListener('change', () => {
+      const d = inp.files?.[0];
+      inp.remove();
+      if (!d) { res(null); return; }
+      if (!erlaubt.includes(d.type)) {
+        melden(`${d.type || 'Dieser Dateityp'} wird nicht unterstützt — PNG, JPEG, SVG oder WebP.`, 'fehler');
+        res(null); return;
+      }
+      const leser = new FileReader();
+      leser.onload = () => res({
+        name: d.name, typ: d.type, groesse: d.size, datenUrl: String(leser.result),
+      });
+      leser.onerror = () => { melden('Die Datei ließ sich nicht lesen.', 'fehler'); res(null); };
+      leser.readAsDataURL(d);
+    });
+    document.body.append(inp);
+    inp.click();
+  });
 }

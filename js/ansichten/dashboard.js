@@ -11,26 +11,71 @@
 // bei der Zeiterfassungs-App der Fehler.
 
 import { el, leeren, eurZeigen, isoNachDe, feld } from '../ui.js';
-import { SPEICHER, alle } from '../db.js';
+import { SPEICHER, alle, einstellungenLesen } from '../db.js';
 import { BELEGART, BELEGART_TEXT, IST_RECHNUNG, STATUS, ermittlungAusVertrag } from '../vorgang.js';
 import { runde2, prozent } from '../hoai/geld.js';
 
 const TAG = 86400000;
 
 export async function dashboardZeigen(wurzel) {
-  const [belege, projekte, vertraege] = await Promise.all([
+  const [belege, projekte, vertraege, adressen, einst] = await Promise.all([
     alle(SPEICHER.BELEGE), alle(SPEICHER.PROJEKTE), alle(SPEICHER.VERTRAEGE),
+    alle(SPEICHER.ADRESSEN), einstellungenLesen(),
   ]);
 
-  wurzel.append(el('h1', { text: 'Dashboard' }));
+  // Das Dashboard zeigt seine Gliederung auch, wenn noch nichts erfasst ist.
+  // Eine leere Seite mit einem Satz laesst offen, was hier spaeter steht — die
+  // Abschnitte mit Nullwerten zeigen es. Zugleich ist ablesbar, was noch fehlt.
+  const leer = !belege.length;
 
-  if (!belege.length) {
+  wurzel.append(
+    el('div', { class: 'seitenkopf' },
+      el('h1', { text: 'Dashboard' }),
+      el('button', { class: 'knopf akzent', onclick: () => { location.hash = '#neu'; } },
+        leer ? 'Ersten Beleg anlegen' : 'Neuer Beleg'),
+    ),
+    leer ? el('p', { class: 'unterzeile', text: 'Noch kein Beleg erfasst — so wird die Seite aussehen, sobald der erste vorliegt.' }) : null,
+  );
+
+  if (leer) {
+    // Die Schritte zeigen den tatsaechlichen Stand, nicht nur eine Anleitung:
+    // Erledigtes ist abgehakt, offen bleibt sichtbar, was noch fehlt.
+    const schritte = [
+      { text: 'Bürodaten erfassen', weg: '#einstellungen',
+        fertig: !!(einst.buero.name && einst.buero.ort),
+        neben: einst.buero.name || 'Name, Anschrift, Bankverbindung' },
+      { text: 'Steuernummer oder USt-IdNr. hinterlegen', weg: '#einstellungen',
+        fertig: !!(einst.buero.steuernummer || einst.buero.ustId),
+        neben: 'Pflichtangabe nach § 14 Abs. 4 Nr. 2 UStG' },
+      { text: 'Projekte laden', weg: '#projekte',
+        fertig: projekte.length > 0,
+        neben: projekte.length ? `${projekte.length} vorhanden` : 'aus untermStrich oder selbst anlegen' },
+      { text: 'Kontakte laden', weg: '#kontakte',
+        fertig: adressen.length > 0,
+        neben: adressen.length ? `${adressen.length} vorhanden` : 'Empfänger der Rechnungen' },
+      { text: 'Ersten Beleg anlegen', weg: '#neu', fertig: false,
+        neben: 'Angebot, Rechnung oder Nachtrag' },
+    ];
+    wurzel.append(el('div', { class: 'kennzahlen' },
+      kachel('Offen', eurZeigen(0), 'keine Rechnung gestellt'),
+      kachel('Überfällig', eurZeigen(0), 'nichts überfällig'),
+      kachel(`Eingegangen ${new Date().getFullYear()}`, eurZeigen(0), 'noch kein Eingang'),
+    ));
     wurzel.append(
-      el('div', { class: 'knopfreihe' },
-        el('button', { class: 'knopf akzent', onclick: () => { location.hash = '#neu'; } }, 'Ersten Beleg anlegen')),
-      el('div', { class: 'leer' },
-        el('p', { text: 'Noch kein Beleg vorhanden.' }),
-        el('p', { class: 'klein', text: 'Zuerst in den Einstellungen die Bürodaten erfassen, dann unter Stammdaten die Projekte laden.' })),
+      abschnitt('So kommen Sie zum ersten Beleg'),
+      el('ol', { class: 'schrittliste' }, ...schritte.map((s) => el('li', { class: s.fertig ? 'fertig' : '' },
+        el('button', { class: 'eintrag', type: 'button', onclick: () => { location.hash = s.weg; } },
+          el('span', { class: 'haken', 'aria-hidden': 'true', text: s.fertig ? '✓' : '' }),
+          el('div', { class: 'haupt' },
+            el('div', { class: 'titel', text: s.text }),
+            el('div', { class: 'neben', text: s.neben })),
+          el('span', { class: 'pfeil', text: '›' }))))),
+      abschnitt('Abrechnungsstand je Projekt'),
+      platzhalterBalken('Sobald ein Vertrag erfasst ist, steht hier je Projekt, wie viel der Vertragssumme bereits abgerechnet ist und was noch offen bleibt.'),
+      abschnitt('Nachträge'),
+      el('div', { class: 'leer' }, el('p', { class: 'klein', text: 'Beauftragte und noch nicht beauftragte Nachträge erscheinen hier, sobald eine zweite Vertragsversion angelegt ist.' })),
+      abschnitt('Belege'),
+      el('div', { class: 'leer' }, el('p', { class: 'klein', text: 'Angebote, Rechnungen und Nachträge — nach Projekt gruppiert.' })),
     );
     return;
   }
@@ -91,7 +136,7 @@ export async function dashboardZeigen(wurzel) {
   }
   stand.sort((a, b) => (b.offen || 0) - (a.offen || 0));
 
-  wurzel.append(el('h2', { text: 'Abrechnungsstand je Projekt' }));
+  wurzel.append(abschnitt('Abrechnungsstand je Projekt'));
   if (!stand.length) {
     wurzel.append(el('div', { class: 'leer' }, el('p', { class: 'klein', text: 'Noch keinem Projekt zugeordnet.' })));
   }
@@ -128,7 +173,7 @@ export async function dashboardZeigen(wurzel) {
   const nachtragsbelege = belege.filter((b) => b.art === BELEGART.NACHTRAG);
 
   if (nachtraege.length || nachtragsbelege.length) {
-    wurzel.append(el('h2', { text: `Nachträge (${nachtraege.length})` }));
+    wurzel.append(abschnitt('Nachträge', String(nachtraege.length)));
     wurzel.append(el('ul', { class: 'liste' }, ...nachtraege.map(({ projekt, v }) => {
       const beauftragt = v.beauftragt === true;
       return el('li', {}, el('button', {
@@ -145,7 +190,7 @@ export async function dashboardZeigen(wurzel) {
   }
 
   // ── Belege nach Projekt ──────────────────────────────
-  wurzel.append(el('h2', { text: `Belege (${belege.length})` }));
+  wurzel.append(abschnitt('Belege', String(belege.length)));
   const box = el('div');
   const suchF = feld({
     label: 'Suchen', art: 'search', platzhalter: 'Nummer, Projekt …',
@@ -198,6 +243,21 @@ function belegZeile(b) {
     ),
     el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? b.zahlbetrag ?? 0) }),
   ));
+}
+
+/** Abschnittstrenner: Linie, Überschrift, optional eine Anzahl rechts. */
+function abschnitt(titel, anzahl = null) {
+  return el('div', { class: 'abschnitt' },
+    el('h2', { text: titel }),
+    anzahl !== null ? el('span', { class: 'anzahl mono', text: anzahl }) : null);
+}
+
+/** Andeutung eines Balkendiagramms für den leeren Zustand. */
+function platzhalterBalken(text) {
+  return el('div', { class: 'platzhalter' },
+    el('div', { class: 'skizze' },
+      ...[62, 44, 28].map((w) => el('div', { class: 'skizzenbalken', style: `width:${w}%` }))),
+    el('p', { class: 'klein', text }));
 }
 
 function kachel(titel, wert, neben, art = '') {

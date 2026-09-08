@@ -146,6 +146,13 @@ export const VORGABE_EINSTELLUNGEN = {
     wortmarkeEnde: '',
     disziplin: '',
     akzent: '#14b8a6',
+    // Logo als Data-URL. Liegt wie alles andere nur auf diesem Geraet und wird
+    // in den Beleg eingebettet — nie von irgendwoher nachgeladen.
+    logo: '',
+    logoName: '',
+    // Schluessel aus SCHRIFTEN (js/beleg/cd.js). Bewusst nur systemeigene
+    // Schriften, siehe die Begruendung dort.
+    schrift: 'system',
   },
   vorgaben: {
     fassung: 2021,

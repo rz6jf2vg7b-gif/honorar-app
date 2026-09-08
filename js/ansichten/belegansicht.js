@@ -16,7 +16,7 @@ import {
   belegStornieren, zahlungErfassen,
 } from '../vorgang.js';
 import { rechnungHtml } from '../beleg/rechnung_html.js';
-import { CD_KREATIVLABOR42 } from '../beleg/cd.js';
+import { CD_KREATIVLABOR42, SCHRIFTEN } from '../beleg/cd.js';
 import { pruefePflichtangaben } from '../beleg/pflichtangaben.js';
 import { prozent } from '../hoai/geld.js';
 
@@ -53,8 +53,16 @@ export async function belegAnsehen(wurzel, belegId) {
   const belegdaten = () => ({
     // Der Beleg bekommt die zusammengesetzten Zeilen, nicht die Einzelfelder.
     buero: { ...einst.buero, ...anschriftZeilen(einst.buero), telefon: telefonZeigen(einst.buero) },
+    // Reihenfolge nach DIN 5008: Firma, Firmenzusatz, Person, Adresszusatz,
+    // Straße, Ort. Der Ansprechpartner steht mit "z. Hd." davor, damit die Post
+    // ihn nicht für den Empfänger hält.
     empfaenger: adresse ? {
-      name: adresse.name, zusatz: adresse.zusatz,
+      name: adresse.name,
+      zusatz: adresse.zusatz,
+      ansprechpartner: adresse.ansprechpartner
+        ? `z. Hd. ${[adresse.anrede, adresse.ansprechpartner].filter(Boolean).join(' ')}`
+        : '',
+      zeile2: adresse.adresszeile2 || '',
       strasse: adresse.strasse, plzOrt: `${adresse.plz || ''} ${adresse.ort || ''}`.trim(),
     } : { name: '—', strasse: '', plzOrt: '' },
     projekt: projekt
@@ -200,15 +208,20 @@ function cdAus(einst) {
   if (c.wortmarkeMager) wortmarke.push({ text: c.wortmarkeMager, gewicht: 300 });
   if (c.wortmarkeFett) wortmarke.push({ text: c.wortmarkeFett, gewicht: 600 });
   if (c.wortmarkeEnde) wortmarke.push({ text: c.wortmarkeEnde, gewicht: 300 });
+  const schrift = SCHRIFTEN[c.schrift] || SCHRIFTEN.geist;
   return {
     ...CD_KREATIVLABOR42,
     marke: {
       ...CD_KREATIVLABOR42.marke,
       name: einst.buero?.name || CD_KREATIVLABOR42.marke.name,
       wortmarke: wortmarke.length ? wortmarke : [{ text: einst.buero?.name || '', gewicht: 400 }],
+      // Ein hinterlegtes Logo schlaegt die Wortmarke — so ist es in cd.js
+      // vorgesehen und so erwartet man es auch.
+      logo: c.logo || null,
       disziplin: c.disziplin || '',
     },
     farben: { ...CD_KREATIVLABOR42.farben, accent: c.akzent || CD_KREATIVLABOR42.farben.accent },
+    schrift: { ...CD_KREATIVLABOR42.schrift, familie: schrift.familie, mono: schrift.mono },
   };
 }
 

@@ -127,12 +127,17 @@ textarea { min-height: 84px; resize: vertical; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 input.zahl, .zahl input { text-align: right; font-family: var(--mono); }
 .feldreihe { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-/* Anschrift: Hausnummer und PLZ brauchen wenig Platz, Straße und Ort viel. */
-.anschrift-reihe { display: grid; grid-template-columns: 1fr 110px; gap: 12px; }
-.anschrift-reihe:nth-of-type(even) { grid-template-columns: 110px 1fr; }
+/* Anschrift: Hausnummer und PLZ brauchen wenig Platz, Straße und Ort viel.
+   Bewusst zwei eigene Klassen statt :nth-of-type(even) — das zählt alle
+   Geschwister-Elemente, nicht nur die mit dieser Klasse, und kippt sobald
+   irgendwo ein Feld dazwischenkommt. Genau das war passiert: Straße stand
+   schmal, die Nummer breit. */
+.reihe-strasse { display: grid; grid-template-columns: 1fr 110px; gap: 12px; }
+.reihe-plzort  { display: grid; grid-template-columns: 110px 1fr; gap: 12px; }
 .telefon-reihe { display: grid; grid-template-columns: 110px 1fr; gap: 12px; }
 @media (max-width: 560px) {
-  .anschrift-reihe, .anschrift-reihe:nth-of-type(even) { grid-template-columns: 1fr 90px; }
+  .reihe-strasse { grid-template-columns: 1fr 74px; }
+  .reihe-plzort  { grid-template-columns: 74px 1fr; }
 }
 .feldreihe-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 560px) { .feldreihe, .feldreihe-3 { grid-template-columns: 1fr; } }
@@ -163,12 +168,16 @@ button.knopf:disabled { opacity: .4; cursor: not-allowed; }
 /* ── Listen und Karten ─────────────────────────────────── */
 .liste { list-style: none; margin: 0; padding: 0; }
 .liste li { border-bottom: 1px solid var(--hair); }
-.liste button.eintrag {
+/* Bewusst ohne den Vorfahren .liste: Ein Eintrag ist überall derselbe Baustein,
+   auch in der Schrittliste des Dashboards. Als der Selektor noch .liste
+   voraussetzte, fiel er dort durch und die Einträge treppten als inline-block
+   nach rechts. */
+button.eintrag {
   display: flex; align-items: center; gap: 12px; width: 100%;
   min-height: 62px; padding: 12px 4px; border: 0; background: none;
   color: inherit; text-align: left; cursor: pointer; font: inherit;
 }
-.liste button.eintrag:hover { background: var(--flaeche); }
+button.eintrag:hover { background: var(--flaeche); }
 .eintrag .haupt { flex: 1; min-width: 0; }
 .eintrag .titel { color: var(--ink); }
 .eintrag .neben { font: 11px/1.4 var(--mono); color: var(--grey-2); letter-spacing: .04em; }
@@ -279,3 +288,179 @@ dl.werte div.summe dt, dl.werte div.summe dd { color: var(--ink); }
 .balken .gefuellt { height: 100%; background: var(--accent); }
 .balkenzeile { display: flex; justify-content: space-between; gap: 10px;
   margin-top: 5px; font-size: 12.5px; color: var(--grey-2); }
+
+/* ————————————————————————————————————————————————————————————————
+   Seitenkopf, Abschnitte
+   ———————————————————————————————————————————————————————————————— */
+
+.seitenkopf {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.seitenkopf h1 { margin-bottom: 0; }
+
+/* Trennlinie mit Überschrift — gliedert auch dann, wenn ein Abschnitt leer ist.
+   Die Ink-Regel sitzt am Container, nicht am h2: als Flex-Element schrumpfte die
+   Linie sonst auf die Breite des Wortes. */
+.abschnitt {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin: 32px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--ink);
+}
+.abschnitt h2 { margin: 0; padding: 0; border: 0; }
+.abschnitt .anzahl { font-size: 11px; color: var(--grey-2); flex: 0 0 auto; }
+
+/* ————————————————————————————————————————————————————————————————
+   Listenseiten (Projekte, Kontakte)
+   ———————————————————————————————————————————————————————————————— */
+
+.listenkopf {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
+  align-items: end; margin-top: 18px;
+}
+.listenkopf .feld { margin-bottom: 0; }
+.listenkopf .knopf { white-space: nowrap; }
+@media (max-width: 720px) {
+  .listenkopf { grid-template-columns: 1fr; }
+  .listenkopf .knopf { width: 100%; }
+}
+
+.trefferzahl {
+  font: 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--grey-2); margin: 16px 0 6px;
+}
+
+.eintrag .pfeil { color: var(--grey-3); flex: 0 0 auto; padding-left: 8px; }
+.eintrag .marke {
+  font: 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--grey-2); border: 1px solid var(--hair); border-radius: var(--r);
+  padding: 4px 6px; flex: 0 0 auto; white-space: nowrap;
+}
+
+/* ————————————————————————————————————————————————————————————————
+   Dashboard: leerer Zustand
+   ———————————————————————————————————————————————————————————————— */
+
+.schrittliste { list-style: none; margin: 0; padding: 0; }
+.schrittliste li { border-bottom: 1px solid var(--hair); }
+.schrittliste .eintrag { min-height: 54px; }
+.schrittliste .haken {
+  flex: 0 0 20px; width: 20px; height: 20px; margin-right: 10px;
+  border: 1px solid var(--hair); border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--paper);
+}
+.schrittliste .fertig .haken { background: var(--accent); border-color: var(--accent); }
+.schrittliste .fertig .titel { color: var(--grey-2); }
+
+.platzhalter { padding: 4px 0 8px; }
+.skizze { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.skizzenbalken {
+  height: 10px; border: 1px dashed var(--hair); border-radius: var(--r);
+  background: repeating-linear-gradient(
+    -45deg, transparent 0 5px, var(--flaeche) 5px 10px);
+}
+
+/* ————————————————————————————————————————————————————————————————
+   Auftritt: Farbe, Schriftprobe, Logo
+   ———————————————————————————————————————————————————————————————— */
+
+.farbreihe { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: center; }
+.farbreihe input[type="color"] {
+  padding: 2px; height: 40px; cursor: pointer; background: var(--paper);
+}
+.hexfeld { text-transform: lowercase; }
+
+.schriftprobe {
+  border: 1px solid var(--hair); border-radius: var(--r);
+  padding: 16px 18px; margin: -4px 0 8px; background: var(--paper);
+}
+.schriftprobe .probe-gross { font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.schriftprobe .probe-klein { font-size: 13px; color: var(--grey-1); margin-top: 6px; }
+
+.logoblock { margin-bottom: 18px; }
+.logovorschau {
+  border: 1px solid var(--hair); border-radius: var(--r);
+  padding: 18px; background: var(--paper);
+  display: flex; align-items: center; justify-content: center; min-height: 90px;
+}
+.logovorschau.leer { border-style: dashed; }
+.logovorschau img { max-width: 240px; max-height: 70px; width: auto; height: auto; }
+
+/* ————————————————————————————————————————————————————————————————
+   Seitenleiste: abgesetzter Fuß (Hilfe, HOAI)
+   ———————————————————————————————————————————————————————————————— */
+
+/* Nur ab 860 px sichtbar — darunter ist die Seitenleiste ausgeblendet. Auf dem
+   Telefon führen die Verweise unter Einstellungen → Nachschlagen dorthin. */
+.leistenfuss {
+  margin-top: auto; padding-top: 12px; border-top: 1px solid var(--hair);
+  display: flex; flex-direction: column;
+}
+.leistenfuss button { opacity: .72; }
+.leistenfuss button:hover { opacity: 1; }
+
+/* Ein langer Dialog (Kontakt bearbeiten) muss auf dem Telefon scrollen können,
+   ohne dass die Knopfreihe mitwandert. */
+.dialoginhalt { max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+
+/* ————————————————————————————————————————————————————————————————
+   Hilfe, HOAI, Vorlagen
+   ———————————————————————————————————————————————————————————————— */
+
+/* Fließtext zum Lesen — schmaler als der Rest, sonst wandert das Auge
+   beim Zeilenwechsel zu weit. */
+.fliess { max-width: 62ch; color: var(--ink-soft); margin: 0 0 12px; line-height: 1.6; }
+
+.regeln { margin: 0 0 16px; }
+.regeln dt {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-top: 16px; font-weight: 600; color: var(--ink);
+}
+.regeln dt .fund {
+  font-size: 11px; letter-spacing: .04em; color: var(--accent);
+  flex: 0 0 auto; min-width: 74px;
+}
+.regeln dd { margin: 4px 0 0 84px; max-width: 58ch; color: var(--grey-1); line-height: 1.6; }
+@media (max-width: 560px) {
+  .regeln dd { margin-left: 0; }
+}
+
+/* Schlichte Liste ohne Klickfläche — reines Nachschlagen. */
+.liste.schlicht li { border-bottom: 1px solid var(--hair); }
+.liste.schlicht .zeile {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; padding: 9px 0;
+}
+.liste.schlicht .zone {
+  min-width: 34px; color: var(--accent); font-size: 12px; letter-spacing: .06em;
+}
+
+.tabelle { width: 100%; border-collapse: collapse; margin: 10px 0 6px; }
+.tabelle th {
+  font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--grey-2); text-align: left; font-weight: 400;
+  padding: 0 8px 6px 0; border-bottom: 1px solid var(--ink);
+}
+.tabelle th.r, .tabelle td.r { text-align: right; padding-right: 0; }
+.tabelle td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--hair); font-size: 13.5px; }
+.tabelle tfoot td {
+  border-top: 1px solid var(--ink); border-bottom: 0;
+  padding-top: 8px; font-weight: 600; color: var(--ink);
+}
+.tabelle.schmal td { padding: 5px 8px 5px 0; font-size: 12px; }
+.tabelle .grau { color: var(--grey-2); }
+
+/* Die Honorartafeln sind für ein Telefon zu breit. Sie scrollen in sich, statt
+   die ganze Seite quer zu ziehen. */
+.tabellenrolle { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tabellenrolle .tabelle { min-width: 560px; }
+
+.hinweiskarte { border-left: 3px solid var(--warn); }
+
+/* Vorschau eines Musterbelegs. Feste Höhe, damit die Seite nicht springt. */
+.vorschau {
+  width: 100%; height: 78vh; min-height: 480px;
+  border: 1px solid var(--hair); border-radius: var(--r);
+  background: #fff; margin-top: 6px;
+}
+@media (max-width: 560px) { .vorschau { height: 62vh; } }
