@@ -15,7 +15,7 @@
 // eigene bleiben immer erhalten.
 
 import { el, leeren, melden, feld, dateiLaden, bestaetigen } from '../ui.js';
-import { SPEICHER, alle, schreiben, schreibeViele, loeschen, neueId, personName } from '../db.js';
+import { SPEICHER, alle, schreiben, schreibeViele, loeschen, neueId, personName, kontaktSuchtext, projektSuchtext } from '../db.js';
 
 // ————————————————————————————————————————————————————————————————
 // Projekte
@@ -37,16 +37,22 @@ export async function projekteZeigen(wurzel) {
         neuText: 'Projekt anlegen',
         onNeu: () => projektBearbeiten(null, zeichnen),
         onLaden: () => einspielen('projekte', zeichnen),
-        suchtextVon: (p) => `${p.nummer} ${p.name} ${p.kuerzel || ''}`,
+        suchtextVon: projektSuchtext,
         titelVon: (p) => p.name,
         nebenVon: (p) => [
           p.nummer,
           p.kuerzel,
-          p.aktiv ? 'aktiv' : null,
+          p.ort,
           p.quelle === 'eigen' ? 'eigen' : null,
         ].filter(Boolean).join(' · '),
+        markeVon: (p) => projektStand(p).text,
+        markeArtVon: (p) => projektStand(p).art,
         onKlick: (p) => { location.hash = `#projekt/${p.id}`; },
         leerText: 'Noch keine Projekte.',
+        filter: {
+          label: 'Abgeschlossene ausblenden',
+          pruefen: (p) => !p.abgerechnet,
+        },
       }),
     );
   };
@@ -76,12 +82,7 @@ export async function kontakteZeigen(wurzel) {
         // Gesucht wird ueber alles, was einen Kontakt wiederfindbar macht — nicht
         // nur ueber den Firmennamen. Wer "Hanz" sucht, meint den
         // Ansprechpartner; wer "Insolvenz" sucht, meint die Notiz.
-        suchtextVon: (a) => [
-          a.name, a.zusatz, a.vorname, a.ansprechpartner, a.titel,
-          a.strasse, a.adresszeile2, a.plz, a.ort,
-          a.mail, a.telefon, a.telefon2, a.mobil, a.web, a.notiz,
-          ...(a.kategorien || []),
-        ].filter(Boolean).join(' '),
+        suchtextVon: kontaktSuchtext,
         titelVon: (a) => a.name,
         nebenVon: (a) => [
           personName(a) || null,
@@ -96,6 +97,23 @@ export async function kontakteZeigen(wurzel) {
     );
   };
   await zeichnen();
+}
+
+/**
+ * Stand eines Projekts in einem Wort.
+ *
+ * Zwei Haken, weil es zwei verschiedene Dinge sind: "abgeschlossen" heißt, die
+ * Leistung ist erbracht — "abgerechnet" heißt, das Honorar ist gestellt und
+ * eingegangen. Zwischen beidem liegen bei Steffen regelmäßig Monate, und in
+ * dieser Zeit ist das Projekt weder aktiv noch erledigt.
+ *
+ * `aktiv` kommt aus untermStrich (Feld f_29), die beiden Haken aus dieser App.
+ */
+export function projektStand(p) {
+  if (p.abgerechnet) return { text: 'abgerechnet', art: 'fertig' };
+  if (p.abgeschlossen) return { text: 'abgeschlossen', art: 'ruht' };
+  if (p.aktiv) return { text: 'aktiv', art: 'aktiv' };
+  return { text: '', art: '' };
 }
 
 const herkunft = (gesamt, eigene, ein, viele) => {
@@ -122,13 +140,19 @@ const herkunft = (gesamt, eigene, ein, viele) => {
 function listenSeite(o) {
   const MAX = 60;
   const box = el('div');
+  let filterAn = !!o.filter;      // Vorgabe: Erledigtes ausgeblendet
+  let letzteSuche = '';
 
   const zeichnen = (suche) => {
+    letzteSuche = suche ?? letzteSuche;
     leeren(box);
-    const s = (suche || '').trim().toLowerCase();
-    const treffer = s
+    const s = (letzteSuche || '').trim().toLowerCase();
+    let treffer = s
       ? o.eintraege.filter((e) => o.suchtextVon(e).toLowerCase().includes(s))
       : o.eintraege;
+    const vorFilter = treffer.length;
+    if (o.filter && filterAn) treffer = treffer.filter(o.filter.pruefen);
+    const ausgeblendet = vorFilter - treffer.length;
 
     if (!o.eintraege.length) {
       box.append(el('div', { class: 'leer' }, el('p', { class: 'klein', text: o.leerText })));
@@ -142,15 +166,20 @@ function listenSeite(o) {
     }
 
     box.append(
-      el('p', { class: 'trefferzahl', text: treffer.length > MAX
-        ? `${treffer.length} Treffer — die ersten ${MAX}. Suche verfeinern.`
-        : `${treffer.length} ${treffer.length === 1 ? 'Treffer' : 'Treffer'}` }),
+      el('p', { class: 'trefferzahl', text: [
+        treffer.length > MAX
+          ? `${treffer.length} Treffer — die ersten ${MAX}. Suche verfeinern.`
+          : `${treffer.length} Treffer`,
+        ausgeblendet ? `${ausgeblendet} ausgeblendet` : null,
+      ].filter(Boolean).join(' · ') }),
       el('ul', { class: 'liste' }, ...treffer.slice(0, MAX).map((e) => el('li', {},
         el('button', { class: 'eintrag', type: 'button', onclick: () => o.onKlick(e) },
           el('div', { class: 'haupt' },
             el('div', { class: 'titel', text: o.titelVon(e) }),
             el('div', { class: 'neben', text: o.nebenVon(e) })),
-          o.markeVon?.(e) ? el('span', { class: 'marke', text: o.markeVon(e) }) : null,
+          o.markeVon?.(e)
+            ? el('span', { class: `marke ${o.markeArtVon?.(e) || ''}`, text: o.markeVon(e) })
+            : null,
           el('span', { class: 'pfeil', text: '›' }),
         )))),
     );
@@ -163,6 +192,12 @@ function listenSeite(o) {
       el('button', { class: 'knopf zweit', type: 'button', onclick: o.onNeu }, o.neuText),
       el('button', { class: 'knopf leise', type: 'button', onclick: o.onLaden }, 'Aus Datei laden'),
     ),
+    o.filter
+      ? feld({
+        label: '', art: 'schalter', wert: filterAn, schaltertext: o.filter.label,
+        onEingabe: (w) => { filterAn = w; zeichnen(); },
+      })
+      : null,
     box);
 }
 
@@ -183,13 +218,28 @@ async function einspielen(art, danach) {
   const vorhanden = await alle(speicher);
   const nachSchluessel = new Map(vorhanden.map((v) => [schluessel(v, art), v]));
 
+  // Felder, die nur in dieser App gepflegt werden. Sie überleben jedes erneute
+  // Einspielen — untermStrich kennt sie nicht und würde sie sonst mit jedem
+  // Abgleich löschen. Genau das wäre passiert: Wer einen Auftraggeber zuordnet
+  // und das Projekt abhakt, hätte beides beim nächsten Import verloren.
+  const APP_FELDER = [
+    'auftraggeberId', 'ansprechpartnerId', 'abgeschlossen', 'abgerechnet',
+    'appNotiz', 'leitwegId',
+  ];
+
   const zuSchreiben = [];
   for (const roh of liste) {
     const s = schluessel(roh, art);
     const alt = nachSchluessel.get(s);
     if (alt && alt.quelle === 'eigen') continue;          // eigene Eintraege nie ueberschreiben
+
+    const behalten = {};
+    for (const f of APP_FELDER) {
+      if (alt?.[f] !== undefined && alt[f] !== '' && alt[f] !== null) behalten[f] = alt[f];
+    }
     zuSchreiben.push({
       ...roh,
+      ...behalten,
       id: alt?.id || `${art === 'projekte' ? 'p' : 'a'}_us_${roh.id || neueId('')}`,
       quelle: 'untermstrich',
     });

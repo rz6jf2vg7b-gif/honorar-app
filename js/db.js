@@ -211,6 +211,31 @@ export function personName(a, { mitAnrede = true } = {}) {
   ].map((x) => (x || '').trim()).filter(Boolean).join(' ');
 }
 
+/**
+ * Woraufhin ein Kontakt gefunden werden soll.
+ *
+ * An EINER Stelle, weil es sonst auseinanderläuft: Die Kontaktliste suchte
+ * bereits über den Ansprechpartner, die Empfängerauswahl im Assistenten
+ * dagegen nur über Name und Ort — ein Kontakt, den man in der Liste fand, war
+ * beim Schreiben einer Rechnung nicht auffindbar.
+ */
+export function kontaktSuchtext(a) {
+  return [
+    a.name, a.zusatz, a.vorname, a.ansprechpartner, a.titel, a.anrede,
+    a.strasse, a.adresszeile2, a.plz, a.ort, a.land,
+    a.mail, a.telefon, a.telefon2, a.mobil, a.web, a.notiz, a.debitor,
+    ...(a.kategorien || []),
+  ].filter(Boolean).join(' ');
+}
+
+/** Dasselbe für Projekte. */
+export function projektSuchtext(p) {
+  return [
+    p.nummer, p.name, p.kuerzel, p.ort, p.landkreis, p.bundesland,
+    p.baubehoerde, p.baurecht, p.verfahren,
+  ].filter(Boolean).join(' ');
+}
+
 export function anschriftZeilen(buero) {
   const strasse = [buero.strasse, buero.hausnummer].filter(Boolean).join(' ').trim();
   const ort = [buero.plz, buero.ort].filter(Boolean).join(' ').trim();

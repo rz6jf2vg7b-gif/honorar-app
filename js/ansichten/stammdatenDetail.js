@@ -8,8 +8,9 @@
 // Bearbeitet wird von hier aus; die Formulare liegen weiter in stammdaten.js,
 // damit es nur eine Stelle gibt, an der ein Datensatz geschrieben wird.
 
-import { el, leeren, eurZeigen, isoNachDe, melden, bestaetigen } from '../ui.js';
-import { SPEICHER, lesen, alle, loeschen, personName } from '../db.js';
+import { el, leeren, eurZeigen, isoNachDe, melden, bestaetigen, zurueck, feld, suchauswahl } from '../ui.js';
+import { SPEICHER, lesen, alle, loeschen, schreiben, personName, kontaktSuchtext } from '../db.js';
+import { projektStand } from './stammdaten.js';
 import { BELEGART_TEXT, IST_RECHNUNG, STATUS, vertraegeZuProjekt } from '../vorgang.js';
 import { LEISTUNGSBILDER, ZONE_ROEMISCH } from '../hoai/leistungsbilder.js';
 import { runde2, prozent } from '../hoai/geld.js';
@@ -18,12 +19,12 @@ const zeile = (bez, wert, summe = false) => (wert === null || wert === undefined
   ? null
   : el('div', { class: summe ? 'summe' : '' }, el('dt', { text: bez }), el('dd', { text: String(wert) })));
 
-const kopf = (kicker, titel, unterzeile) => [
+const kopf = (kicker, titel, unterzeile, rueckfall = '#projekte') => [
   el('div', { class: 'schrittkopf' },
     el('span', { class: 'kicker', text: kicker }),
     el('button', {
       class: 'knopf leise', type: 'button', style: 'min-height:34px;padding:0 12px;',
-      onclick: () => { location.hash = '#stammdaten'; },
+      onclick: () => zurueck(rueckfall),
     }, 'Zurück'),
   ),
   el('h1', { text: titel }),
@@ -50,12 +51,42 @@ export async function projektAnsehen(wurzel, projektId) {
     .filter((b) => b.projektId === projektId)
     .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
 
+  const stand = projektStand(projekt);
   wurzel.append(...kopf(
     `Projekt ${projekt.nummer}${projekt.kuerzel ? ` · ${projekt.kuerzel}` : ''}`,
     projekt.name,
-    [projekt.aktiv ? 'aktives Projekt' : 'ruhend',
-      projekt.quelle === 'untermstrich' ? 'aus untermStrich' : 'selbst angelegt'].join(' · '),
+    [stand.text || 'ohne Stand',
+      projekt.ort,
+      projekt.quelle === 'untermstrich' ? 'aus untermStrich' : 'selbst angelegt'].filter(Boolean).join(' · '),
+    '#projekte',
   ));
+
+  // ── Stand ────────────────────────────────────────────
+  // Die beiden Haken liegen bewusst oben: Sie sind das, was man beim Öffnen
+  // eines Projekts am häufigsten setzen will.
+  const standBox = el('div', { class: 'standreihe' });
+  const setzen = async (feldName, wert) => {
+    projekt[feldName] = wert;
+    await schreiben(SPEICHER.PROJEKTE, projekt);
+    melden(wert ? 'Gesetzt.' : 'Zurückgenommen.');
+    leeren(wurzel);
+    await projektAnsehen(wurzel, projektId);
+  };
+  standBox.append(
+    feld({
+      label: '', art: 'schalter', wert: !!projekt.abgeschlossen,
+      schaltertext: 'Leistung abgeschlossen',
+      onEingabe: (w) => setzen('abgeschlossen', w),
+    }),
+    feld({
+      label: '', art: 'schalter', wert: !!projekt.abgerechnet,
+      schaltertext: 'vollständig abgerechnet',
+      onEingabe: (w) => setzen('abgerechnet', w),
+    }),
+  );
+  wurzel.append(standBox,
+    el('p', { class: 'klein', text: 'Abgerechnete Projekte werden in der Projektliste und bei der Belegerstellung ausgeblendet. '
+      + '„Aktiv“ kommt dagegen aus untermStrich (Feld „Projekt aktiv“) und lässt sich nur dort ändern.' }));
 
   // ── Kennzahlen ───────────────────────────────────────
   const rechnungen = eigene.filter((b) => IST_RECHNUNG(b.art) && b.status === STATUS.FEST);
@@ -72,12 +103,84 @@ export async function projektAnsehen(wurzel, projektId) {
   )));
 
   // ── Stammdaten ───────────────────────────────────────
+  // ── Auftraggeber ─────────────────────────────────────
+  // untermStrich führt über die REST-Schnittstelle keine Projektbeteiligten;
+  // die Zuordnung entsteht deshalb hier und bleibt beim erneuten Einspielen
+  // erhalten.
+  const auftraggeber = projekt.auftraggeberId
+    ? adressen.find((a) => a.id === projekt.auftraggeberId)
+    : null;
+
+  wurzel.append(el('h2', { text: 'Auftraggeber' }));
+  if (auftraggeber) {
+    wurzel.append(
+      el('ul', { class: 'liste' }, el('li', {},
+        el('button', { class: 'eintrag', type: 'button',
+          onclick: () => { location.hash = `#adresse/${auftraggeber.id}`; } },
+          el('div', { class: 'haupt' },
+            el('div', { class: 'titel', text: auftraggeber.name }),
+            el('div', { class: 'neben', text: [personName(auftraggeber), auftraggeber.zusatz,
+              `${auftraggeber.plz || ''} ${auftraggeber.ort || ''}`.trim()].filter(Boolean).join(' · ') })),
+          el('span', { class: 'pfeil', text: '›' }),
+        ))),
+      el('div', { class: 'knopfreihe' },
+        el('button', { class: 'knopf leise', type: 'button', onclick: () => auftraggeberWaehlen() }, 'Anderen wählen'),
+        el('button', { class: 'knopf leise', type: 'button',
+          onclick: async () => { projekt.auftraggeberId = ''; await schreiben(SPEICHER.PROJEKTE, projekt);
+            leeren(wurzel); await projektAnsehen(wurzel, projektId); } }, 'Zuordnung lösen'),
+      ),
+    );
+  } else {
+    wurzel.append(
+      el('div', { class: 'leer' }, el('p', { class: 'klein',
+        text: 'Kein Auftraggeber zugeordnet. Er wird beim Anlegen eines Belegs vorgeschlagen.' })),
+      el('div', { class: 'knopfreihe' },
+        el('button', { class: 'knopf zweit', type: 'button', onclick: () => auftraggeberWaehlen() }, 'Auftraggeber zuordnen')),
+    );
+  }
+
+  function auftraggeberWaehlen() {
+    const dlg = el('dialog', { class: 'karte dialog', style: 'max-width:520px;width:92%;' },
+      el('h3', { text: 'Auftraggeber zuordnen' }),
+      el('div', { class: 'dialoginhalt' }, suchauswahl({
+        label: 'Kontakt suchen',
+        platzhalter: 'Name, Ansprechpartner, Ort …',
+        eintraege: adressen,
+        textVon: (a) => a.name,
+        nebenVon: (a) => [personName(a), a.zusatz, `${a.plz || ''} ${a.ort || ''}`.trim()]
+          .filter(Boolean).join(' · '),
+        suchtextVon: kontaktSuchtext,
+        onWahl: async (a) => {
+          projekt.auftraggeberId = a.id;
+          await schreiben(SPEICHER.PROJEKTE, projekt);
+          dlg.close();
+          melden('Auftraggeber zugeordnet.');
+          leeren(wurzel);
+          await projektAnsehen(wurzel, projektId);
+        },
+      })),
+      el('div', { class: 'knopfreihe' },
+        el('button', { class: 'knopf zweit', type: 'button', onclick: () => dlg.close() }, 'Abbrechen')),
+    );
+    document.body.append(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.showModal();
+  }
+
+  // ── Stammdaten ───────────────────────────────────────
   wurzel.append(el('h2', { text: 'Stammdaten' }),
     el('dl', { class: 'werte' },
       zeile('Projektnummer', projekt.nummer),
-      zeile('Kürzel', projekt.kuerzel),
+      zeile('Kürzel', projekt.kuerzel
+        + (projekt.kuerzelAusUstrich ? '' : ' (abgeleitet, in untermStrich nicht gepflegt)')),
       zeile('Bezeichnung', projekt.name),
-      zeile('Status', projekt.aktiv ? 'aktiv' : 'ruhend'),
+      zeile('Ort', projekt.ort),
+      zeile('Landkreis', projekt.landkreis),
+      zeile('Bundesland', projekt.bundesland),
+      zeile('Baurecht', projekt.baurecht),
+      zeile('Verfahren', projekt.verfahren),
+      zeile('Baubehörde', projekt.baubehoerde),
+      zeile('In untermStrich aktiv', projekt.quelle === 'untermstrich' ? (projekt.aktiv ? 'ja' : 'nein') : null),
       zeile('Herkunft', projekt.quelle === 'untermstrich' ? 'untermStrich' : 'eigene Eingabe'),
       zeile('Schriftverkehr-Pfad', projekt.pfadSchriftverkehr),
     ));
@@ -166,6 +269,7 @@ export async function adresseAnsehen(wurzel, adresseId) {
     adresse.name,
     [personName(adresse), adresse.zusatz, `${adresse.plz || ''} ${adresse.ort || ''}`.trim(),
       adresse.quelle === 'untermstrich' ? 'aus untermStrich' : 'selbst angelegt'].filter(Boolean).join(' · '),
+    '#kontakte',
   ));
 
   if (adresse.kategorien?.length) {

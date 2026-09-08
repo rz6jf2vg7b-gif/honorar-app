@@ -5,7 +5,7 @@
 // Vertragsformular liegt beim ersten Blick auf die Belegliste noch gar nicht im
 // Speicher.
 
-import { el, leeren, symbol, SYMBOL, melden } from './ui.js';
+import { el, leeren, symbol, SYMBOL, melden, navigationZaehlen } from './ui.js';
 import { einstellungenLesen } from './db.js';
 
 // `kurz` ist die Beschriftung der Tab-Leiste auf dem Telefon — dort ist neben
@@ -58,6 +58,7 @@ async function markeSetzen() {
 }
 
 async function leiten() {
+  navigationZaehlen();
   const roh = (location.hash || '#dashboard').slice(1);
   const [weg, wert] = roh.split('/');
   const bereich = {

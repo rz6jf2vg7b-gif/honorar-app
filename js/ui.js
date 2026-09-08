@@ -25,6 +25,33 @@ export function el(tag, attr = {}, ...kinder) {
 
 export const leeren = (n) => { while (n.firstChild) n.removeChild(n.firstChild); return n; };
 
+// ————————————————————————————————————————————————————————————————
+// Zurueckgehen
+// ————————————————————————————————————————————————————————————————
+
+// Wie oft innerhalb dieser Sitzung navigiert wurde. Nur wenn das mindestens
+// einmal geschah, fuehrt history.back() zurueck in die App statt auf die Seite,
+// von der man hergekommen ist.
+//
+// Steht hier und nicht in app.js: Die Ansichten werden von app.js dynamisch
+// geladen: importierten sie von dort zurueck, entstuende ein Zyklus.
+let schritteInApp = 0;
+
+export function navigationZaehlen() { schritteInApp++; }
+
+/**
+ * Eine Ansicht zurueck.
+ *
+ * Vorher sprang der Zurueck-Knopf fest auf die Stammdaten — wer aus der Suche
+ * auf einen Kontakt geklickt hatte, landete danach bei den Projekten. Jetzt
+ * geht es dorthin zurueck, wo man herkam; nur wenn es dort nichts gibt (die
+ * Ansicht wurde ueber einen Link direkt geoeffnet), greift der Rueckfall.
+ */
+export function zurueck(rueckfall = '#dashboard') {
+  if (schritteInApp > 1) history.back();
+  else location.hash = rueckfall;
+}
+
 /** Kurze Rueckmeldung am unteren Rand. */
 export function melden(text, art = '') {
   document.querySelectorAll('.meldung').forEach((m) => m.remove());
@@ -161,7 +188,12 @@ export const heuteIso = () => new Date().toISOString().slice(0, 10);
 
 /**
  * @param {object} o
- *   {label, eintraege, textVon, nebenVon, onWahl, platzhalter, leerHinweis, onNeu}
+ *   {label, eintraege, textVon, nebenVon, suchtextVon?, onWahl, platzhalter,
+ *    leerHinweis, onNeu}
+ *
+ * `suchtextVon` bestimmt, worüber gesucht wird. Ohne die Angabe wird über das
+ * gesucht, was angezeigt wird — das reicht selten: Ein Kontakt wird über den
+ * Namen seines Ansprechpartners gesucht, auch wenn in der Zeile die Firma steht.
  */
 export function suchauswahl(o) {
   const treffer = el('div', { class: 'trefferliste' });
@@ -169,9 +201,11 @@ export function suchauswahl(o) {
   const zeichnen = (suche) => {
     leeren(treffer);
     const s = (suche || '').trim().toLowerCase();
+    const suchtext = o.suchtextVon
+      || ((e) => `${o.textVon(e)} ${o.nebenVon ? o.nebenVon(e) : ''}`);
     const liste = (o.eintraege || []).filter((e) => {
       if (!s) return true;
-      return `${o.textVon(e)} ${o.nebenVon ? o.nebenVon(e) : ''}`.toLowerCase().includes(s);
+      return suchtext(e).toLowerCase().includes(s);
     }).slice(0, 40);
 
     if (!liste.length) {

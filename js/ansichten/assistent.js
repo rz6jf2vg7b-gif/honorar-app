@@ -12,7 +12,7 @@ import {
   el, feld, leeren, melden, suchauswahl, eurZeigen, zahlLesen, zahlZeigen,
   heuteIso, isoNachDe, bestaetigen,
 } from '../ui.js';
-import { SPEICHER, alle, schreiben, neueId, einstellungenLesen } from '../db.js';
+import { SPEICHER, alle, schreiben, neueId, einstellungenLesen, kontaktSuchtext, projektSuchtext, personName } from '../db.js';
 import {
   BELEGART, BELEGART_TEXT, IST_RECHNUNG,
   nummerVorschlagen, nummerFrei, aktuellerVertrag, vertraegeZuProjekt,
@@ -162,15 +162,27 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
         ));
         box.querySelector('.knopfreihe.fest button.akzent')?.removeAttribute('disabled');
       } else {
+        // Abgerechnete Projekte stehen nicht zur Wahl: Wer eine Rechnung
+        // schreibt, meint ein laufendes. Sie bleiben über die Projektliste
+        // erreichbar, wo sich der Haken auch wieder lösen lässt.
+        const waehlbar = projekte.filter((p) => !p.abgerechnet);
         anzeige.append(suchauswahl({
           label: 'Projekt suchen',
-          eintraege: [...projekte].sort((a, b) => (b.aktiv === true) - (a.aktiv === true)
+          leerHinweis: projekte.length > waehlbar.length
+            ? 'Kein Treffer. Abgerechnete Projekte werden hier nicht angeboten.'
+            : 'Kein Treffer.',
+          eintraege: [...waehlbar].sort((a, b) => (b.aktiv === true) - (a.aktiv === true)
             || String(a.nummer).localeCompare(String(b.nummer))),
           textVon: (p) => p.name,
           nebenVon: (p) => `${p.nummer}${p.kuerzel ? ` · ${p.kuerzel}` : ''}${p.aktiv ? ' · aktiv' : ''}`,
+          suchtextVon: projektSuchtext,
           leerHinweis: projekte.length ? 'Kein Treffer.' : 'Noch keine Projekte — aus untermStrich laden oder neu anlegen.',
           onWahl: async (p) => {
             entwurf.projektId = p.id;
+            // Am Projekt hinterlegter Auftraggeber wird übernommen — er ist in
+            // aller Regel auch der Rechnungsempfänger. Änderbar bleibt er im
+            // nächsten Schritt.
+            if (p.auftraggeberId && !entwurf.adresseId) entwurf.adresseId = p.auftraggeberId;
             vertragBestand = await aktuellerVertrag(p.id);
             zeigen();
           },
@@ -241,7 +253,9 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
           label: 'Empfänger suchen',
           eintraege: adressen,
           textVon: (a) => a.name,
-          nebenVon: (a) => [a.zusatz, `${a.plz || ''} ${a.ort || ''}`.trim()].filter(Boolean).join(' · '),
+          nebenVon: (a) => [personName(a), a.zusatz, `${a.plz || ''} ${a.ort || ''}`.trim()]
+            .filter(Boolean).join(' · '),
+          suchtextVon: kontaktSuchtext,
           leerHinweis: adressen.length ? 'Kein Treffer.' : 'Noch keine Adressen — aus untermStrich laden oder neu anlegen.',
           onWahl: (a) => { entwurf.adresseId = a.id; zeigen(); },
           onNeu: (suche) => adresseAnlegen(suche, zeigen),

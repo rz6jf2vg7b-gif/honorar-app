@@ -544,3 +544,12 @@ input.zahl.schmal { max-width: 76px; min-height: 34px; padding: 4px 8px; }
 .teilfuss { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hair); }
 .teilfuss .klein.fehler { color: var(--fehler); }
 .teilfuss .hinweis.fehler { margin-top: 6px; max-width: 68ch; }
+
+/* Stand eines Projekts */
+.standreihe { display: flex; gap: 26px; flex-wrap: wrap; margin: 6px 0 4px; }
+.standreihe .feld { margin-bottom: 0; }
+.standreihe .feld > label:empty { display: none; }
+
+.marke.aktiv { color: var(--accent); border-color: var(--accent); }
+.marke.ruht { color: var(--warn); border-color: var(--warn); }
+.marke.fertig { color: var(--grey-2); background: var(--flaeche); }
