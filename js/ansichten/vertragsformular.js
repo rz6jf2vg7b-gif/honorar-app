@@ -9,6 +9,7 @@ import { el, feld, leeren, zahlLesen, zahlZeigen, eurZeigen, melden } from '../u
 import { LEISTUNGSBILDER, HONORARSAETZE, ZONE_ROEMISCH, HONORARZONEN } from '../hoai/leistungsbilder.js';
 import { ANRECHNUNG } from '../hoai/rechnen.js';
 import { prozent } from '../hoai/geld.js';
+import { honorarzoneErmitteln } from './honorarzone.js';
 
 const KOSTENGRUPPEN_VORLAGE = [
   { nr: '200', bezeichnung: 'Herrichten und Erschließen', anrechnung: ANRECHNUNG.KEINE },
@@ -128,7 +129,26 @@ export function vertragsformular(o) {
         wert: i + 1, text: `${ZONE_ROEMISCH[i + 1]} — ${HONORARZONEN[i + 1]}`,
       })),
       onAenderung: (w) => { v.honorarzone = Number(w); melden_(); },
-    }));
+    }),
+    // Der Weg über Objektliste und Bewertungsmerkmale — er liefert Zone UND
+    // Begründung. Von Hand tippt man die Begründung sonst frei, und genau
+    // danach fragen öffentliche Auftraggeber.
+    el('div', { class: 'knopfreihe', style: 'margin-top:6px' },
+      el('button', {
+        class: 'knopf zweit', type: 'button',
+        onclick: () => honorarzoneErmitteln({
+          leistungsbild: leistungsbildF.eingabe.value,
+          zone: v.honorarzone,
+          begruendung: zoneBegruendungF.eingabe.value,
+          onUebernehmen: (zone, begruendung) => {
+            v.honorarzone = zone;
+            zoneBegruendungF.eingabe.value = begruendung;
+            zoneFeldNeu();
+            melden_();
+          },
+        }),
+      }, 'Zone ermitteln')),
+    );
   };
   zoneFeldNeu();
 

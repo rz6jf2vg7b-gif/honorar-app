@@ -26,6 +26,7 @@ import {
 import { GRUNDLEISTUNGEN } from '../hoai/grundleistungen.js';
 import { prozent, runde2 } from '../hoai/geld.js';
 import { herleitungZeichnen } from './herleitung.js';
+import { honorarzoneErmitteln } from './honorarzone.js';
 
 const ANRECHNUNG_TEXT = {
   [ANRECHNUNG.VOLL]: 'voll anrechenbar',
@@ -44,6 +45,7 @@ const VORGABE = () => ({
     { nr: '300', bezeichnung: 'Bauwerk – Baukonstruktionen', betrag: 1000000, anrechnung: ANRECHNUNG.VOLL },
     { nr: '400', bezeichnung: 'Bauwerk – Technische Anlagen', betrag: 250000, anrechnung: ANRECHNUNG.TECHNIK_33_2 },
   ],
+  honorarzoneBegruendung: '',
   umbauzuschlag: 0,
   nebenkosten: 0.05,
   ustSatz: 0.19,
@@ -107,6 +109,10 @@ export async function rechnerZeigen(wurzel) {
     onAenderung: (w) => {
       z.leistungsbild = w;
       phasenZuruecksetzen(z);
+      // Die Begründung galt dem alten Leistungsbild — ein Regelbeispiel aus
+      // Anlage 10 hat für Freianlagen nichts zu sagen.
+      z.honorarzoneBegruendung = '';
+      zeichneZone();
       zeichneZuschlaege();       // Obergrenze des Umbauzuschlags hängt daran
       neuRechnen();
     },
@@ -116,12 +122,34 @@ export async function rechnerZeigen(wurzel) {
     optionen: [{ wert: 2021, text: 'HOAI 2021' }, { wert: 2013, text: 'HOAI 2013' }],
     onAenderung: (w) => { z.fassung = Number(w); zeichneSatz(); neuRechnen(); },
   });
-  const fZone = feld({
-    label: 'Honorarzone', art: 'auswahl', wert: z.honorarzone,
-    optionen: [1, 2, 3, 4, 5].map((n) =>
-      ({ wert: n, text: `${ZONE_ROEMISCH[n]} — ${HONORARZONEN[n]}` })),
-    onAenderung: (w) => { z.honorarzone = Number(w); neuRechnen(); },
-  });
+  const zoneBox = el('div');
+  const zeichneZone = () => {
+    leeren(zoneBox);
+    zoneBox.append(
+      feld({
+        label: 'Honorarzone', art: 'auswahl', wert: z.honorarzone,
+        optionen: [1, 2, 3, 4, 5].map((n) =>
+          ({ wert: n, text: `${ZONE_ROEMISCH[n]} — ${HONORARZONEN[n]}` })),
+        hinweis: z.honorarzoneBegruendung || null,
+        onAenderung: (w) => { z.honorarzone = Number(w); neuRechnen(); },
+      }),
+      el('div', { class: 'knopfreihe', style: 'margin-top:6px' },
+        el('button', {
+          class: 'knopf zweit', type: 'button',
+          onclick: () => honorarzoneErmitteln({
+            leistungsbild: z.leistungsbild,
+            zone: z.honorarzone,
+            begruendung: z.honorarzoneBegruendung,
+            onUebernehmen: (zone, begruendung) => {
+              z.honorarzone = zone;
+              z.honorarzoneBegruendung = begruendung;
+              zeichneZone();
+              neuRechnen();
+            },
+          }),
+        }, 'Zone ermitteln')),
+    );
+  };
   const satzBox = el('div');
   const zeichneSatz = () => {
     leeren(satzBox);
@@ -134,10 +162,12 @@ export async function rechnerZeigen(wurzel) {
   };
   zeichneSatz();
 
+  zeichneZone();
   wurzel.append(
     el('div', { class: 'abschnitt' }, el('h2', { text: 'Grundlagen' })),
     fLeistungsbild,
-    el('div', { class: 'feldreihe' }, fFassung, fZone),
+    fFassung,
+    zoneBox,
     satzBox,
   );
 
@@ -502,6 +532,7 @@ function rechne(z) {
       gruppen: z.gruppen.filter((g) => g.betrag > 0),
     },
     honorarzone: z.honorarzone,
+    honorarzoneBegruendung: z.honorarzoneBegruendung || '',
     honorarsatz: z.honorarsatz,
     phasen,
     zuschlaege,
