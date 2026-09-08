@@ -40,8 +40,21 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-html, body {
-  margin: 0; padding: 0; height: 100%;
+html { height: 100%; }
+
+/*
+ * body ist der Flex-Container des Ganzen — nicht #app.
+ * Die Tab-Leiste steht im HTML NEBEN #app, nicht darin. Wäre nur #app ein
+ * Flex-Container, bliebe die Leiste außen vor und würde aus dem Fenster
+ * geschoben; genau das war der Fehler.
+ */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;              /* gescrollt wird im Inhalt, nicht im Fenster */
+  margin: 0; padding: 0;
   background: var(--paper); color: var(--ink-soft);
   font: 15px/1.5 var(--schrift);
   font-variant-numeric: tabular-nums lining-nums;
@@ -49,20 +62,48 @@ html, body {
 }
 
 /* ── Grundgerüst ───────────────────────────────────────── */
-#app { display: flex; min-height: 100%; flex-direction: column; }
+/*
+ * Die Tab-Leiste ist BESTANDTEIL des Layouts, nicht darübergelegt.
+ *
+ * Mit position:fixed wanderte sie auf dem iPhone beim Scrollen: Safari
+ * blendet seine Adressleiste ein und aus, der Viewport ändert dabei seine
+ * Höhe, und eine fest verankerte Leiste ruckelt hinterher. Als letztes
+ * Element eines Flex-Containers mit 100dvh kann das nicht passieren — die
+ * Leiste sitzt, der Inhalt scrollt in sich.
+ *
+ * 100dvh statt 100vh: dvh folgt der tatsächlich sichtbaren Höhe. 100vh meint
+ * auf iOS die Höhe OHNE Adressleiste und ist damit zu groß, solange sie
+ * eingeblendet ist — genau daher kam der Balken, der zu weit unten saß.
+ */
+#app {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 .seitenleiste { display: none; }
 
 .inhalt {
-  flex: 1; padding: 20px 18px calc(var(--tab-hoehe) + 28px);
+  flex: 1 1 auto;
+  min-height: 0;                 /* sonst wächst der Inhalt über den Container */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   max-width: 900px; width: 100%; margin: 0 auto;
+  /* Die sicheren Ränder gehören zum Inhalt, nicht zum Fenster: Auf dem iPhone
+     reicht die Anzeige unter die abgerundeten Ecken. Ohne diese Angabe stand
+     der Text rechts über dem Rand — sichtbar an angeschnittenen Pfeilen. */
+  padding: 20px max(18px, env(safe-area-inset-right)) 28px max(18px, env(safe-area-inset-left));
 }
 
 .tableiste {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  flex: 0 0 auto;
   display: flex; background: var(--paper);
   border-top: 1px solid var(--hair);
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 .tableiste button {
   flex: 1; min-height: var(--tab-hoehe); border: 0; background: none;
@@ -81,7 +122,9 @@ html, body {
     display: flex; flex-direction: column; gap: 2px;
     width: 232px; flex: 0 0 232px; padding: 24px 14px;
     border-right: 1px solid var(--hair); background: var(--flaeche);
-    position: sticky; top: 0; align-self: flex-start; height: 100vh;
+    /* Kein sticky mehr nötig: Der Container ist so hoch wie das Fenster,
+       gescrollt wird nur im Inhalt. */
+    overflow-y: auto;
   }
   .seitenleiste .marke { padding: 0 8px 22px; font-size: 17px; color: var(--ink); }
   .seitenleiste button {
@@ -163,6 +206,9 @@ button.knopf:disabled { opacity: .4; cursor: not-allowed; }
 .knopfreihe.fest {
   position: sticky; bottom: 0; padding: 14px 0 6px; margin-top: 24px;
   background: linear-gradient(to bottom, transparent, var(--paper) 22%);
+  /* Klebt am unteren Rand des scrollenden Inhalts — nicht am Fenster.
+     Über der Tab-Leiste bleibt sie dadurch immer sichtbar. */
+  z-index: 2;
 }
 
 /* ── Listen und Karten ─────────────────────────────────── */
@@ -249,7 +295,8 @@ dl.werte div.summe dt, dl.werte div.summe dd { color: var(--ink); }
 /* ── Meldungen ─────────────────────────────────────────── */
 .meldung {
   position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(var(--tab-hoehe) + 16px); z-index: 60;
+  /* Über der Tab-Leiste, und auf dem iPhone über deren sicherem Rand. */
+  bottom: calc(var(--tab-hoehe) + env(safe-area-inset-bottom) + 16px); z-index: 60;
   max-width: 92%; padding: 12px 18px; border-radius: var(--r);
   background: var(--ink); color: var(--paper); font-size: 14px;
   box-shadow: 0 4px 18px rgba(0,0,0,.22);
