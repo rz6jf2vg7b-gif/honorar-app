@@ -50,6 +50,7 @@ const VORGABE = () => ({
   ],
   honorarzoneBegruendung: '',
   massnahme: '',
+  wiederholungen: 0,
   umbauzuschlagVereinbart: true,
   objektueberwachungZuschlag: 0,
   umbauzuschlag: 0,
@@ -230,7 +231,10 @@ export async function rechnerZeigen(wurzel) {
     const eur = (anteil) => (gh === null ? '—' : eurZeigen(runde2(gh * anteil)));
     grundhonorarZeile.textContent = gh === null
       ? 'Grundhonorar noch nicht berechenbar'
-      : `Grundhonorar bei 100 %: ${eurZeigen(gh)}`;
+      : `Grundhonorar bei 100 %: ${eurZeigen(gh)}`
+        + (z.wiederholungen > 0
+          ? ` · Werte je Objekt — für alle ${z.wiederholungen + 1} siehe Ergebnis`
+          : '');
 
     const kopf = el('tr', {},
       el('th', { text: '' }), el('th', { text: 'LPh' }), el('th', { text: 'Leistungsphase' }),
@@ -431,7 +435,24 @@ export async function rechnerZeigen(wurzel) {
         : 'Art der Maßnahme wählen — davon hängt ab, welcher Zuschlag in Betracht kommt.' }));
     }
 
-    zuschlagBox.append(fMassnahme, besonderer,
+    // § 11 Abs. 3: mehrere im Wesentlichen gleiche Objekte
+    const fWiederholungen = feld({
+      label: 'Weitere gleiche Objekte', art: 'zahl', einheit: 'Stück',
+      wert: z.wiederholungen ? zahlZeigen(z.wiederholungen) : '',
+      hinweis: z.wiederholungen
+        ? `§ 11 Abs. 3 — ${z.wiederholungen + 1} Objekte insgesamt. Die Leistungsphasen 1 bis 6 `
+          + 'werden je Wiederholung gemindert: 50 % für die erste bis vierte, 60 % für die '
+          + 'fünfte bis siebte, 90 % ab der achten. Die Phasen 7 bis 9 fallen bei jedem Objekt voll an.'
+        : 'Bei im Wesentlichen gleichen Gebäuden, Typenplanung oder Serienbauten (§ 11 Abs. 3). '
+          + 'Leer oder 0 = ein einzelnes Objekt.',
+      onEingabe: (w) => {
+        z.wiederholungen = Math.max(0, Math.round(w ?? 0));
+        zeichneZuschlaege();
+        neuRechnen();
+      },
+    });
+
+    zuschlagBox.append(fMassnahme, besonderer, fWiederholungen,
       el('div', { class: 'feldreihe' },
         feld({
           label: 'Nebenkosten', art: 'zahl', einheit: '%', wert: zahlZeigen(z.nebenkosten * 100),
@@ -617,6 +638,7 @@ function rechne(z) {
     honorarsatz: z.honorarsatz,
     massnahme: z.massnahme || undefined,
     objektueberwachungZuschlag: z.objektueberwachungZuschlag || undefined,
+    wiederholungen: z.wiederholungen || 0,
     phasen,
     zuschlaege,
     nebenkosten: { art: 'pauschal', prozent: z.nebenkosten },

@@ -79,6 +79,33 @@ export const UMBAUZUSCHLAG_OHNE_VEREINBARUNG = 0.20;
 /** Obergrenze der Erhoehung nach § 12 Abs. 2. */
 export const OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX = 0.50;
 
+/**
+ * Minderung der Prozentsaetze bei Wiederholungen (§ 11 Abs. 3).
+ *
+ * "Umfasst ein Auftrag mehrere im Wesentlichen gleiche Gebaeude … oder mehrere
+ * Objekte nach Typenplanung oder Serienbauten, so sind die Prozentsaetze der
+ * Leistungsphasen 1 bis 6 fuer die erste bis vierte Wiederholung um 50 Prozent,
+ * fuer die fuenfte bis siebte Wiederholung um 60 Prozent und ab der achten
+ * Wiederholung um 90 Prozent zu mindern."
+ *
+ * Entscheidend ist das Wort WIEDERHOLUNG: Das erste Objekt wird voll berechnet,
+ * gemindert werden erst die weiteren. Und gemindert werden nur die
+ * Leistungsphasen 1 bis 6 — die Ausfuehrungsphasen 7 bis 9 fallen bei jedem
+ * Objekt erneut vollstaendig an, ein Bauleiter steht auf jeder Baustelle.
+ *
+ * @param {number} nr Nummer der Wiederholung, 1 = erste Wiederholung
+ * @returns {number} Minderung als Anteil (0.5 = um 50 Prozent gemindert)
+ */
+export function wiederholungsminderung(nr) {
+  if (nr <= 0) return 0;
+  if (nr <= 4) return 0.50;
+  if (nr <= 7) return 0.60;
+  return 0.90;
+}
+
+/** Leistungsphasen, die § 11 Abs. 3 mindert. */
+export const GEMINDERTE_PHASEN = [1, 2, 3, 4, 5, 6];
+
 export const ANRECHNUNG = {
   VOLL: 'voll',                 // vollstaendig anrechenbar
   ANTEILIG: 'anteilig',         // mit einem vereinbarten Prozentsatz
@@ -515,6 +542,56 @@ export function honorarermittlung(v) {
   }
   herleitung.push(...lph.herleitung);
 
+  // ── Mehrere gleiche Objekte (§ 11 Abs. 3) ─────────────
+  // Gerechnet wird das erste Objekt voll, jede Wiederholung mit geminderten
+  // Prozentsaetzen der Leistungsphasen 1 bis 6. Das Ergebnis ist das Honorar
+  // fuer ALLE Objekte zusammen — deshalb tritt es an die Stelle des
+  // Einzelhonorars und nicht daneben.
+  const wiederholungen = Math.max(0, Math.round(v.wiederholungen || 0));
+  let grundleistungen = lph.erbracht;
+  let objektzeilen = null;
+
+  if (wiederholungen > 0) {
+    const jeObjekt = (minderung) => {
+      let summe = 0;
+      for (const z of lph.zeilen) {
+        const anteil = GEMINDERTE_PHASEN.includes(z.nr)
+          ? z.vereinbart * z.erbrachtAnteil * (1 - minderung)
+          : z.vereinbart * z.erbrachtAnteil;
+        summe = runde2(summe + runde2(gh.betrag * anteil));
+      }
+      return summe;
+    };
+
+    objektzeilen = [{ nr: 1, bezeichnung: 'Erstes Objekt', minderung: 0, betrag: jeObjekt(0) }];
+    let gesamt = objektzeilen[0].betrag;
+    for (let k = 1; k <= wiederholungen; k++) {
+      const minderung = wiederholungsminderung(k);
+      const betrag = jeObjekt(minderung);
+      objektzeilen.push({
+        nr: k + 1,
+        bezeichnung: `${k}. Wiederholung`,
+        minderung,
+        betrag,
+      });
+      gesamt = runde2(gesamt + betrag);
+    }
+    grundleistungen = gesamt;
+
+    herleitung.push(tabelle(
+      `Mehrere gleiche Objekte — § 11 Abs. 3 HOAI (${wiederholungen + 1} Objekte)`,
+      ['Objekt', 'Minderung LPh 1–6', 'Honorar'],
+      objektzeilen.map((o) => [
+        o.bezeichnung,
+        o.minderung ? prozent(o.minderung) : '—',
+        eur(o.betrag),
+      ]),
+      [`Summe ${wiederholungen + 1} Objekte`, '', eur(grundleistungen)],
+      ['Gemindert werden nur die Leistungsphasen 1 bis 6. Die Phasen 7 bis 9 '
+        + 'fallen bei jedem Objekt erneut vollständig an.'],
+    ));
+  }
+
   // Zuschlaege auf die erbrachten Grundleistungen
   const zuschlaege = [];
   let summeZuschlaege = 0;
@@ -526,7 +603,7 @@ export function honorarermittlung(v) {
         + `${prozent(lb.umbauzuschlagBis)} (${lb.umbauzuschlagFundstelle} HOAI).`,
       );
     }
-    const betrag = runde2(lph.erbracht * z.prozent);
+    const betrag = runde2(grundleistungen * z.prozent);
     summeZuschlaege = runde2(summeZuschlaege + betrag);
     zuschlaege.push({ ...z, betrag });
   }
@@ -550,7 +627,7 @@ export function honorarermittlung(v) {
   }
 
   // Nebenkosten
-  const basisNebenkosten = runde2(lph.erbracht + summeZuschlaege + summeWeitere);
+  const basisNebenkosten = runde2(grundleistungen + summeZuschlaege + summeWeitere);
   let nebenkosten = 0;
   const nk = v.nebenkosten;
   if (nk && nk.art === 'pauschal') {
@@ -568,10 +645,15 @@ export function honorarermittlung(v) {
       ['Summe der Nebenkosten', eur(nebenkosten)]));
   }
 
-  const netto = runde2(lph.erbracht + summeZuschlaege + summeWeitere + nebenkosten);
+  const netto = runde2(grundleistungen + summeZuschlaege + summeWeitere + nebenkosten);
 
   const zusammenstellung = [
-    { bez: 'Grundleistungen', betrag: lph.erbracht },
+    {
+      bez: wiederholungen > 0
+        ? `Grundleistungen (${wiederholungen + 1} Objekte, § 11 Abs. 3)`
+        : 'Grundleistungen',
+      betrag: grundleistungen,
+    },
     ...zuschlaege.map((z) => ({ bez: `+ ${z.bezeichnung}`, betrag: z.betrag })),
     ...weitere.map((p) => ({ bez: `+ ${p.bezeichnung}`, betrag: p.betrag })),
     { bez: '+ Nebenkosten', betrag: nebenkosten },
@@ -583,7 +665,12 @@ export function honorarermittlung(v) {
     anrechenbareKosten: ak.betrag,
     grundhonorar100: gh.betrag,
     grundleistungenVereinbart: lph.vereinbart,
-    grundleistungen: lph.erbracht,
+    grundleistungen,
+    // Honorar eines einzelnen Objekts — bleibt sichtbar, damit die Wirkung der
+    // Minderung nachvollziehbar ist.
+    grundleistungenJeObjekt: lph.erbracht,
+    wiederholungen,
+    objekte: objektzeilen,
     zuschlaege,
     weiterePositionen: weitere,
     nebenkosten,

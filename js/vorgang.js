@@ -190,6 +190,7 @@ export function ermittlungAusVertrag(vertrag, leistungsstand = null) {
     // Vertragsstand — ohne sie käme der Zuschlag im Beleg nie an.
     massnahme: vertrag.massnahme,
     objektueberwachungZuschlag: vertrag.objektueberwachungZuschlag,
+    wiederholungen: vertrag.wiederholungen,
     phasen,
     zuschlaege: vertrag.zuschlaege || [],
     weiterePositionen: vertrag.weiterePositionen || [],

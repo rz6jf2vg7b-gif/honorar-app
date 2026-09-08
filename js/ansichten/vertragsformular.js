@@ -308,6 +308,15 @@ export function vertragsformular(o) {
       : 'Art der Maßnahme wählen — davon hängt ab, welcher Zuschlag in Betracht kommt.' }));
   };
 
+  const wiederholungenF = feld({
+    label: 'Weitere gleiche Objekte', art: 'zahl', einheit: 'Stück',
+    wert: v.wiederholungen ? zahlZeigen(v.wiederholungen) : '',
+    hinweis: 'Bei im Wesentlichen gleichen Gebäuden, Typenplanung oder Serienbauten '
+      + '(§ 11 Abs. 3): Die Leistungsphasen 1 bis 6 werden je Wiederholung gemindert. '
+      + 'Leer oder 0 = ein einzelnes Objekt.',
+    onEingabe: (w) => { v.wiederholungen = Math.max(0, Math.round(w ?? 0)); melden_(); },
+  });
+
   const massnahmeF = feld({
     label: 'Art der Maßnahme', art: 'auswahl', wert: v.massnahme || '',
     optionen: [{ wert: '', text: '— nicht angegeben —' },
@@ -391,7 +400,7 @@ export function vertragsformular(o) {
     phasenBox,
 
     el('h2', { text: 'Zuschläge und Nebenkosten' }),
-    massnahmeF, zuschlagBox, nkArtF, nkBox,
+    massnahmeF, zuschlagBox, wiederholungenF, nkArtF, nkBox,
   );
 
   function lesen() {
@@ -414,6 +423,7 @@ export function vertragsformular(o) {
       phasen: v.phasen.filter((p) => p.vereinbart > 0).map((p) => ({ nr: p.nr, vereinbart: p.vereinbart })),
       massnahme: v.massnahme || undefined,
       objektueberwachungZuschlag: v.objektueberwachungZuschlag || undefined,
+      wiederholungen: v.wiederholungen || 0,
       zuschlaege: v.umbauzuschlag > 0
         ? [{
           art: 'umbau',
@@ -462,6 +472,7 @@ function strukturieren(vertrag, vorgaben = {}) {
     umbauzuschlagVereinbart: v.umbauzuschlagVereinbart !== false,
     massnahme: v.massnahme || '',
     objektueberwachungZuschlag: v.objektueberwachungZuschlag || 0,
+    wiederholungen: v.wiederholungen || 0,
     nebenkosten: v.nebenkosten !== undefined
       ? v.nebenkosten
       : { art: 'pauschal', prozent: vorgaben.nebenkostenProzent ?? 0.05 },
