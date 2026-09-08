@@ -73,6 +73,7 @@ export async function hilfeZeigen(wurzel) {
     el('div', { class: 'knopfreihe' },
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hoai'; } }, 'HOAI'),
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#vorlagen'; } }, 'Dokumentvorlagen'),
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#rechtliches'; } }, 'Rechtliches'),
       el('button', { class: 'knopf leise', onclick: () => { location.hash = '#einstellungen'; } }, 'Einstellungen'),
     ),
   );

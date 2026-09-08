@@ -139,6 +139,23 @@ export const VORGABE_EINSTELLUNGEN = {
     steuernummerMuster: 'auto',
     ustId: '',
     kleinunternehmer: false,
+
+    // ── Berufsangaben ─────────────────────────────────
+    // Pflichtangaben fuer das Impressum (§ 5 DDG) und die Dienstleisterinformation
+    // (§ 2 DL-InfoV). Bei Architekten kommen die berufsrechtlichen Angaben hinzu:
+    // Berufsbezeichnung, verleihender Staat, zustaendige Kammer, Berufsordnung.
+    berufsbezeichnung: 'Architekt',
+    verleihenderStaat: 'Bundesrepublik Deutschland',
+    kammer: '',
+    kammerAnschrift: '',
+    kammerWeb: '',
+    eintragungsnummer: '',
+    berufsordnungWeb: '',
+    // § 2 Abs. 1 Nr. 11 DL-InfoV: Berufshaftpflicht mit Name, Anschrift und
+    // raeumlichem Geltungsbereich.
+    haftpflichtVersicherer: '',
+    haftpflichtAnschrift: '',
+    haftpflichtGeltungsbereich: 'Europäische Union',
   },
   cd: {
     wortmarkeMager: '',
@@ -244,6 +261,9 @@ export function anschriftZeilen(buero) {
 }
 
 export function telefonZeigen(buero) {
+  // Ohne Nummer keine Vorwahl: Sonst stand im Impressum "Telefon: +49" —
+  // formal eine Angabe, tatsaechlich keine.
+  if (!buero.telefon) return '';
   return [buero.telefonLand, buero.telefon].filter(Boolean).join(' ').trim();
 }
 

@@ -59,6 +59,26 @@ export async function einstellungenZeigen(wurzel) {
     t('buero.mail', 'E-Mail', { art: 'email' }),
     t('buero.web', 'Web'),
 
+    el('h2', { text: 'Berufsangaben' }),
+    el('p', { class: 'klein', text: 'Pflichtangaben für das Impressum (§ 5 DDG) und die Dienstleisterinformation '
+      + '(§ 2 DL-InfoV). Sie erscheinen nicht auf dem Beleg, sondern unter Rechtliches.' }),
+    el('div', { class: 'feldreihe' },
+      t('buero.berufsbezeichnung', 'Berufsbezeichnung', { platzhalter: 'Architekt' }),
+      t('buero.verleihenderStaat', 'Verliehen in', { platzhalter: 'Bundesrepublik Deutschland' })),
+    t('buero.kammer', 'Zuständige Kammer', { platzhalter: 'Architektenkammer Rheinland-Pfalz' }),
+    el('div', { class: 'feldreihe' },
+      t('buero.kammerAnschrift', 'Anschrift der Kammer', { platzhalter: 'Hindenburgplatz 6, 55118 Mainz' }),
+      t('buero.eintragungsnummer', 'Eintragungsnummer', { platzhalter: 'Nummer in der Architektenliste' })),
+    el('div', { class: 'feldreihe' },
+      t('buero.kammerWeb', 'Web der Kammer', { platzhalter: 'www.diearchitekten.org' }),
+      t('buero.berufsordnungWeb', 'Berufsordnung einsehbar unter', { platzhalter: 'Adresse der Berufsordnung' })),
+    el('h3', { text: 'Berufshaftpflicht' }),
+    el('p', { class: 'klein', text: 'Nach § 2 Abs. 1 Nr. 11 DL-InfoV mit Name, Anschrift und räumlichem Geltungsbereich anzugeben.' }),
+    el('div', { class: 'feldreihe' },
+      t('buero.haftpflichtVersicherer', 'Versicherer'),
+      t('buero.haftpflichtAnschrift', 'Anschrift des Versicherers')),
+    t('buero.haftpflichtGeltungsbereich', 'Räumlicher Geltungsbereich', { platzhalter: 'Europäische Union' }),
+
     el('h2', { text: 'Bank und Steuer' }),
     t('buero.bank', 'Bank'),
     t('buero.iban', 'IBAN', {
@@ -191,6 +211,7 @@ export async function einstellungenZeigen(wurzel) {
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hoai'; } }, 'HOAI'),
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#synopse'; } }, 'Synopse'),
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#vorlagen'; } }, 'Dokumentvorlagen'),
+      el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#rechtliches'; } }, 'Rechtliches'),
     ),
 
     el('h2', { text: 'Sicherung' }),

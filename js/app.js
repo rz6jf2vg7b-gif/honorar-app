@@ -64,7 +64,7 @@ async function leiten() {
   const bereich = {
     beleg: 'dashboard', belege: 'dashboard',
     projekt: 'projekte', adresse: 'kontakte', stammdaten: 'projekte',
-    vorlagen: 'einstellungen', synopse: 'hoai',
+    vorlagen: 'einstellungen', synopse: 'hoai', rechtliches: 'einstellungen',
   }[weg] || weg;
   navigationBauen(bereich);
   leeren(inhalt);
@@ -102,6 +102,9 @@ async function leiten() {
     } else if (weg === 'hoai') {
       const { hoaiZeigen } = await import('./ansichten/hoai.js');
       await hoaiZeigen(inhalt, wert);
+    } else if (weg === 'rechtliches') {
+      const { rechtlichesZeigen } = await import('./ansichten/rechtliches.js');
+      await rechtlichesZeigen(inhalt);
     } else if (weg === 'synopse') {
       const { synopseZeigen } = await import('./ansichten/synopse.js');
       await synopseZeigen(inhalt);
