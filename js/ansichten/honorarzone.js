@@ -19,7 +19,7 @@
 import { el, leeren, feld, melden } from '../ui.js';
 import { HONORARZONEN_BEWERTUNG, zoneAusPunkten, vorbelegung } from '../hoai/honorarzonen.js';
 import { OBJEKTLISTEN } from '../hoai/objektlisten.js';
-import { ZONE_ROEMISCH, HONORARZONEN, LEISTUNGSBILDER } from '../hoai/leistungsbilder.js';
+import { ZONE_ROEMISCH, HONORARZONEN, LEISTUNGSBILDER, honorarzonenFuer } from '../hoai/leistungsbilder.js';
 
 /**
  * Öffnet den Dialog.
@@ -57,12 +57,16 @@ export function honorarzoneErmitteln(o) {
     ergebnisZeile.append(
       el('div', { class: 'zonenwert' },
         el('span', { class: 'roemisch', text: ZONE_ROEMISCH[zone] }),
-        el('span', { class: 'klein', text: HONORARZONEN[zone] })),
+        el('span', { class: 'klein', text: zonenName(o.leistungsbild, zone) })),
       el('div', { class: 'klein', text: begruendung || 'Noch keine Begründung — sie erscheint auf dem Beleg.' }),
     );
   };
 
   // ── 1. Objektliste ──────────────────────────────────
+  // Die Flaechenplanung hat keine Objektliste — ein Bebauungsplan ist kein
+  // Objekt, das sich in Regelbeispiele einordnen liesse. Die Verordnung fuehrt
+  // dort ausschliesslich die Punktbewertung (§ 20 Abs. 4, § 21 Abs. 4,
+  // §§ 28 bis 32). Der Schritt entfaellt dann ganz, statt leer dazustehen.
   const liste = OBJEKTLISTEN[o.leistungsbild];
   const trefferBox = el('div', { class: 'objekttreffer' });
 
@@ -118,7 +122,8 @@ export function honorarzoneErmitteln(o) {
           : null,
         feld({
           label: 'Honorarzone', art: 'auswahl', wert: zone,
-          optionen: [1, 2, 3, 4, 5].map((n) => ({ wert: n, text: `${ZONE_ROEMISCH[n]} — ${HONORARZONEN[n]}` })),
+          optionen: honorarzonenFuer(o.leistungsbild)
+            .map((zn) => ({ wert: zn.nr, text: `${zn.roemisch} — ${zn.text}` })),
           onAenderung: (w) => { zone = Number(w); zeichneErgebnis(); },
         }),
       );
@@ -179,28 +184,48 @@ export function honorarzoneErmitteln(o) {
     }));
   };
 
+  // Die Schritte werden gezaehlt, nicht fest beziffert: Ohne Objektliste ist
+  // die Merkmalsbewertung Schritt 1, nicht Schritt 2.
+  let schritt = 0;
+  const nr = () => (schritt += 1);
+
+  inhalt.append(ergebnisZeile);
+  if (liste) {
+    inhalt.append(
+      el('div', { class: 'abschnitt' }, el('h2', { text: `${nr()} · Objektliste` })),
+      el('p', { class: 'klein', text: `${b.fundstelle} — Regelbeispiele nach ${b.objektliste}. Passt eines, ist die Zone begründet.` }),
+      feld({ label: 'Regelbeispiel suchen', art: 'search', platzhalter: 'Schule, Wohnhaus, Halle …',
+        onEingabe: (w) => zeichneTreffer(w) }),
+      trefferBox,
+    );
+  }
   inhalt.append(
-    ergebnisZeile,
-    el('div', { class: 'abschnitt' }, el('h2', { text: '1 · Objektliste' })),
-    el('p', { class: 'klein', text: `${b.fundstelle} — Regelbeispiele nach ${b.objektliste}. Passt eines, ist die Zone begründet.` }),
-    feld({ label: 'Regelbeispiel suchen', art: 'search', platzhalter: 'Schule, Wohnhaus, Halle …',
-      onEingabe: (w) => zeichneTreffer(w) }),
-    trefferBox,
-    el('div', { class: 'abschnitt' }, el('h2', { text: b.punkte ? '2 · Bewertungsmerkmale' : '2 · Bewertungsmerkmale' } )),
+    el('div', { class: 'abschnitt' }, el('h2', { text: `${nr()} · Bewertungsmerkmale` })),
     el('p', { class: 'klein', text: b.punkte
-      ? 'Nach der HOAI erst heranzuziehen, wenn kein Regelbeispiel passt — und die Punktbewertung erst, wenn Merkmale mehrerer Zonen zutreffen.'
+      ? (liste
+        ? 'Nach der HOAI erst heranzuziehen, wenn kein Regelbeispiel passt — und die Punktbewertung erst, wenn Merkmale mehrerer Zonen zutreffen.'
+        : 'Für dieses Leistungsbild gibt es keine Objektliste — die Zone wird allein über die Bewertungsmerkmale ermittelt.')
       : 'Für dieses Leistungsbild sieht die HOAI keine Punktbewertung vor.' }),
     merkmalBox,
-    el('div', { class: 'abschnitt' }, el('h2', { text: '3 · Begründung' })),
+    el('div', { class: 'abschnitt' }, el('h2', { text: `${nr()} · Begründung` })),
     begruendungBox,
   );
 
   zeichneErgebnis();
-  zeichneTreffer('');
+  if (liste) zeichneTreffer('');
   zeichneMerkmale();
   zeichneBegruendung();
 
   document.body.append(dlg);
   dlg.addEventListener('close', () => dlg.remove());
   dlg.showModal();
+}
+
+/**
+ * Bezeichnung EINER Zone im jeweiligen Leistungsbild — dieselbe Quelle wie die
+ * Auswahlliste, damit Auswahl und Ergebnisanzeige nicht auseinanderlaufen.
+ */
+function zonenName(leistungsbild, nr) {
+  return honorarzonenFuer(leistungsbild).find((z) => z.nr === nr)?.text
+    || HONORARZONEN[nr] || '';
 }

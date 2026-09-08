@@ -9,6 +9,775 @@
 // traegt der Nutzer ein und sie wird bei ihm gespeichert.
 
 export const GRUNDLEISTUNGEN = {
+ "flaechennutzungsplan": {
+  "anlage": "Anlage 2",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Vorentwurf für die frühzeitigen Beteiligungen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Werten des vorhandenen Grundlagenmaterials"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Erfassen der abwägungsrelevanten Sachverhalte"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Festlegen ergänzender Fachleistungen und Formulieren von Entscheidungshilfen für die Auswahl anderer fachlich Beteiligter, soweit notwendig"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Analysieren und Darstellen des Zustandes des Plangebiets, soweit für die Planung von Bedeutung und abwägungsrelevant, unter Verwendung hierzu vorliegender Fachbeiträge"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Mitwirken beim Festlegen von Zielen und Zwecken der Planung"
+     },
+     {
+      "buchstabe": "g",
+      "text": "Erarbeiten des Vorentwurfes in der vorgeschriebenen Fassung mit Begründung für die frühzeitigen Beteiligungen nach den Bestimmungen des Baugesetzbuchs"
+     },
+     {
+      "buchstabe": "h",
+      "text": "Darlegen der wesentlichen Auswirkungen der Planung"
+     },
+     {
+      "buchstabe": "i",
+      "text": "Berücksichtigen von Fachplanungen"
+     },
+     {
+      "buchstabe": "j",
+      "text": "Mitwirken an der frühzeitigen Öffentlichkeitsbeteiligung einschließlich Erörterung der Planung"
+     },
+     {
+      "buchstabe": "k",
+      "text": "Mitwirken an der frühzeitigen Beteiligung der Behörden und Stellen, die Träger öffentlicher Belange sind"
+     },
+     {
+      "buchstabe": "l",
+      "text": "Mitwirken an der frühzeitigen Abstimmung mit den Nachbargemeinden"
+     },
+     {
+      "buchstabe": "m",
+      "text": "Abstimmen des Vorentwurfes für die frühzeitigen Beteiligungen in der vorgeschriebenen Fassung mit der Gemeinde"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Entwurf zur öffentlichen Auslegung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Erarbeiten des Entwurfes in der vorgeschriebenen Fassung mit Begründung für die Öffentlichkeits- und Behördenbeteiligung nach den Bestimmungen des Baugesetzbuchs"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Mitwirken an der Öffentlichkeitsbeteiligung"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Mitwirken an der Beteiligung der Behörden und Stellen, die Träger öffentlicher Belange sind"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Mitwirken an der Abstimmung mit den Nachbargemeinden"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Mitwirken bei der Abwägung der Gemeinde zu Stellungnahmen aus frühzeitigen Beteiligungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Abstimmen des Entwurfs mit der Gemeinde"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Plan zur Beschlussfassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Erarbeiten des Planes in der vorgeschriebenen Fassung mit Begründung für den Beschluss durch die Gemeinde"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Mitwirken bei der Abwägung der Gemeinde zu Stellungnahmen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Erstellen des Planes in der durch Beschluss der Gemeinde aufgestellten Fassung."
+     }
+    ]
+   }
+  }
+ },
+ "bebauungsplan": {
+  "anlage": "Anlage 3",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Vorentwurf für die frühzeitigen Beteiligungen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Werten des vorhandenen Grundlagenmaterials"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Erfassen der abwägungsrelevanten Sachverhalte"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Festlegen ergänzender Fachleistungen und Formulieren von Entscheidungshilfen für die Auswahl anderer fachlich Beteiligter, soweit notwendig"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Analysieren und Darstellen des Zustandes des Plangebiets, soweit für die Planung von Bedeutung und abwägungsrelevant, unter Verwendung hierzu vorliegender Fachbeiträge"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Mitwirken beim Festlegen von Zielen und Zwecken der Planung"
+     },
+     {
+      "buchstabe": "g",
+      "text": "Erarbeiten des Vorentwurfes in der vorgeschriebenen Fassung mit Begründung für die frühzeitigen Beteiligungen nach den Bestimmungen des Baugesetzbuchs"
+     },
+     {
+      "buchstabe": "h",
+      "text": "Darlegen der wesentlichen Auswirkungen der Planung"
+     },
+     {
+      "buchstabe": "i",
+      "text": "Berücksichtigen von Fachplanungen"
+     },
+     {
+      "buchstabe": "j",
+      "text": "Mitwirken an der frühzeitigen Öffentlichkeitsbeteiligung einschließlich Erörterung der Planung"
+     },
+     {
+      "buchstabe": "k",
+      "text": "Mitwirken an der frühzeitigen Beteiligung der Behörden und Stellen, die Träger öffentlicher Belange sind"
+     },
+     {
+      "buchstabe": "l",
+      "text": "Mitwirken an der frühzeitigen Abstimmung mit den Nachbargemeinden"
+     },
+     {
+      "buchstabe": "m",
+      "text": "Abstimmen des Vorentwurfes für die frühzeitigen Beteiligungen in der vorgeschriebenen Fassung mit der Gemeinde"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Entwurf zur öffentlichen Auslegung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Erarbeiten des Entwurfes in der vorgeschriebenen Fassung mit Begründung für die Öffentlichkeits- und Behördenbeteiligung nach den Bestimmungen des Baugesetzbuchs"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Mitwirken an der Öffentlichkeitsbeteiligung"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Mitwirken an der Beteiligung der Behörden und Stellen, die Träger öffentlicher Belange sind"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Mitwirken an der Abstimmung mit den Nachbargemeinden"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Mitwirken bei der Abwägung der Gemeinde zu Stellungnahmen aus frühzeitigen Beteiligungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Abstimmen des Entwurfs mit der Gemeinde"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Plan zur Beschlussfassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Erarbeiten des Planes in der vorgeschriebenen Fassung mit Begründung für den Beschluss durch die Gemeinde"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Mitwirken bei der Abwägung der Gemeinde zu Stellungnahmen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Erstellen des Planes in der durch Beschluss der Gemeinde aufgestellten Fassung."
+     }
+    ]
+   }
+  }
+ },
+ "landschaftsplan": {
+  "anlage": "Anlage 4",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Klären der Aufgabenstellung und Ermitteln des Leistungsumfangs",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Prüfen der vom Auftraggeber zur Verfügung gestellten planungsrelevanten Unterlagen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Abgrenzen des Planungsgebiets"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Konkretisieren weiteren Bedarfs an Daten und Unterlagen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Beraten zum Leistungsumfang für ergänzende Untersuchungen und Fachleistungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Aufstellen eines verbindlichen Arbeitsplans unter Berücksichtigung der sonstigen Fachbeiträge"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Ermitteln der Planungsgrundlagen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Ermitteln und Beschreiben der planungsrelevanten Sachverhalte auf Grundlage vorhandener Unterlagen und Daten"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Landschaftsbewertung nach den Zielen und Grundsätzen des Naturschutzes und der Landschaftspflege"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Bewerten von Flächen und Funktionen des Naturhaushalts und des Landschaftsbildes hinsichtlich ihrer Eignung, Leistungsfähigkeit, Empfindlichkeit und Vorbelastung"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Bewerten geplanter Eingriffe in Natur und Landschaft"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Feststellen von Nutzungs- und Zielkonflikten"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Zusammenfassendes Darstellen der Erfassung und Bewertung"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Vorläufige Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Formulieren von örtlichen Zielen und Grundsätzen zum Schutz, zur Pflege und Entwicklung von Natur und Landschaft einschließlich Erholungsvorsorge"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Darlegen der angestrebten Flächenfunktionen und Flächennutzungen sowie der örtlichen Erfordernisse und Maßnahmen zur Umsetzung der konkretisierten Ziele des Naturschutzes und der Landschaftspflege"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Erarbeiten von Vorschlägen zur Übernahme in andere Planungen, insbesondere in die Bauleitpläne"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Hinweise auf Folgeplanungen und -maßnahmen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Mitwirken bei der Beteiligung der nach den Bestimmungen des Bundesnaturschutzgesetzes anerkannten Verbände"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Mitwirken bei der Abstimmung der Vorläufigen Fassung mit der für Naturschutz und Landschaftspflege zuständigen Behörde"
+     },
+     {
+      "buchstabe": "g",
+      "text": "Abstimmen der Vorläufigen Fassung mit dem Auftraggeber"
+     }
+    ]
+   },
+   "4": {
+    "bezeichnung": "Abgestimmte Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "",
+      "text": "Darstellen des Landschaftsplans in der mit dem Auftraggeber abgestimmten Fassung in Text und Karte."
+     }
+    ]
+   }
+  }
+ },
+ "gruenordnungsplan": {
+  "anlage": "Anlage 5",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Klären der Aufgabenstellung und Ermitteln des Leistungsumfangs",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Prüfen der vom Auftraggeber zur Verfügung gestellten planungsrelevanten Unterlagen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Abgrenzen des Planungsgebiets"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Konkretisieren weiteren Bedarfs an Daten und Unterlagen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Beraten zum Leistungsumfang für ergänzende Untersuchungen und Fachleistungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Aufstellen eines verbindlichen Arbeitsplans unter Berücksichtigung der sonstigen Fachbeiträge"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Ermitteln der Planungsgrundlagen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Ermitteln und Beschreiben der planungsrelevanten Sachverhalte auf Grundlage vorhandener Unterlagen und Daten"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Bewerten der Landschaft nach den Zielen des Naturschutzes und der Landschaftspflege einschließlich der Erholungsvorsorge"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Zusammenfassendes Darstellen der Bestandsaufnahme und Bewertung in Text und Karte"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Vorläufige Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Lösen der Planungsaufgabe und Erläutern der Ziele, Erfordernisse und Maßnahmen in Text und Karte"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Darlegen der angestrebten Flächenfunktionen und Flächennutzungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Darlegen von Gestaltungs-, Schutz-, Pflege- und Entwicklungsmaßnahmen"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Vorschläge zur Übernahme in andere Planungen, insbesondere in die Bauleitplanung"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Mitwirken bei der Abstimmung der vorläufigen Fassung mit der für den Naturschutz zuständigen Behörde"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Bearbeiten der naturschutzrechtlichen Eingriffsregelung aa)Ermitteln und Bewerten der durch die Planung zu erwartenden Beeinträchtigungen des Naturhaushalts und des Landschaftsbildes nach Art, Umfang, Ort und zeitlichem Ablaufbb)Erarbeiten von Lösungen zur Vermeidung oder Verminderung erheblicher Beeinträchtigungen des Naturhaushalts und des Landschaftsbildes in Abstimmung mit den an der Planung fachlich Beteiligtencc)Ermitteln der unvermeidbaren Beeinträchtigungendd)Vergleichendes Gegenüberstellen von unvermeidbaren Beeinträchtigungen und Ausgleich und Ersatz einschließlich Darstellen verbleibender, nicht ausgleichbarer oder ersetzbarer Beeinträchtigungenee)Darstellen und Begründen von Maßnahmen des Naturschutzes und der Landschaftspflege, insbesondere Ausgleichs-, Ersatz-, Gestaltungs- und Schutzmaßnahmen sowie Maßnahmen zur Unterhaltung und rechtlichen Sicherung von Ausgleichs- und Ersatzmaßnahmenff)Integrieren ergänzender, zulassungsrelevanter Regelungen und Maßnahmen auf Grund des Natura 2000-Gebietsschutzes und der Vorschriften zum besonderen Artenschutz auf Grundlage vorhandener Unterlagen"
+     },
+     {
+      "buchstabe": "aa",
+      "text": "Ermitteln und Bewerten der durch die Planung zu erwartenden Beeinträchtigungen des Naturhaushalts und des Landschaftsbildes nach Art, Umfang, Ort und zeitlichem Ablauf"
+     },
+     {
+      "buchstabe": "bb",
+      "text": "Erarbeiten von Lösungen zur Vermeidung oder Verminderung erheblicher Beeinträchtigungen des Naturhaushalts und des Landschaftsbildes in Abstimmung mit den an der Planung fachlich Beteiligten"
+     },
+     {
+      "buchstabe": "cc",
+      "text": "Ermitteln der unvermeidbaren Beeinträchtigungen"
+     },
+     {
+      "buchstabe": "dd",
+      "text": "Vergleichendes Gegenüberstellen von unvermeidbaren Beeinträchtigungen und Ausgleich und Ersatz einschließlich Darstellen verbleibender, nicht ausgleichbarer oder ersetzbarer Beeinträchtigungen"
+     },
+     {
+      "buchstabe": "ee",
+      "text": "Darstellen und Begründen von Maßnahmen des Naturschutzes und der Landschaftspflege, insbesondere Ausgleichs-, Ersatz-, Gestaltungs- und Schutzmaßnahmen sowie Maßnahmen zur Unterhaltung und rechtlichen Sicherung von Ausgleichs- und Ersatzmaßnahmen"
+     },
+     {
+      "buchstabe": "ff",
+      "text": "Integrieren ergänzender, zulassungsrelevanter Regelungen und Maßnahmen auf Grund des Natura 2000-Gebietsschutzes und der Vorschriften zum besonderen Artenschutz auf Grundlage vorhandener Unterlagen"
+     }
+    ]
+   },
+   "4": {
+    "bezeichnung": "Abgestimmte Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "",
+      "text": "Darstellen des Grünordnungsplans oder Landschaftsplanerischen Fachbeitrags in der mit dem Auftraggeber abgestimmten Fassung in Text und Karte."
+     }
+    ]
+   }
+  }
+ },
+ "landschaftsrahmenplan": {
+  "anlage": "Anlage 6",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Klären der Aufgabenstellung und Ermitteln des Leistungsumfangs",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Prüfen der vom Auftraggeber zur Verfügung gestellten planungsrelevanten Unterlagen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Abgrenzen des Planungsgebiets"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Konkretisieren weiteren Bedarfs an Daten und Unterlagen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Beraten zum Leistungsumfang für ergänzende Untersuchungen und Fachleistungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Aufstellen eines verbindlichen Arbeitsplans unter Berücksichtigung der sonstigen Fachbeiträge"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Ermitteln der Planungsgrundlagen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Ermitteln und Beschreiben der planungsrelevanten Sachverhalte auf Grundlage vorhandener Unterlagen und Daten"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Landschaftsbewertung nach den Zielen und Grundsätzen des Naturschutzes und der Landschaftspflege"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Bewerten von Flächen und Funktionen des Naturhaushalts und des Landschaftsbildes hinsichtlich ihrer Eignung, Leistungsfähigkeit, Empfindlichkeit und Vorbelastung"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Bewerten geplanter Eingriffe in Natur und Landschaft"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Feststellen von Nutzungs- und Zielkonflikten"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Zusammenfassendes Darstellen der Erfassung und Bewertung"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Vorläufige Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Lösen der Planungsaufgabe und"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Erläutern der Ziele, Erfordernisse und Maßnahmen in Text und KarteZu Buchstabe a) und b) gehören: aa)Erstellen des Zielkonzeptsbb)Umsetzen des Zielkonzepts durch Schutz, Pflege und Entwicklung bestimmter Teile von Natur und Landschaft und durch Artenhilfsmaßnahmen für ausgewählte Tier- und Pflanzenartencc)Vorschläge zur Übernahme in andere Planungen, insbesondere in Regionalplanung, Raumordnung und Bauleitplanungdd)Mitwirken bei der Abstimmung der vorläufigen Fassung mit der für den Naturschutz zuständigen Behördeee)Abstimmen der Vorläufigen Fassung mit dem Auftraggeber"
+     },
+     {
+      "buchstabe": "aa",
+      "text": "Erstellen des Zielkonzepts"
+     },
+     {
+      "buchstabe": "bb",
+      "text": "Umsetzen des Zielkonzepts durch Schutz, Pflege und Entwicklung bestimmter Teile von Natur und Landschaft und durch Artenhilfsmaßnahmen für ausgewählte Tier- und Pflanzenarten"
+     },
+     {
+      "buchstabe": "cc",
+      "text": "Vorschläge zur Übernahme in andere Planungen, insbesondere in Regionalplanung, Raumordnung und Bauleitplanung"
+     },
+     {
+      "buchstabe": "dd",
+      "text": "Mitwirken bei der Abstimmung der vorläufigen Fassung mit der für den Naturschutz zuständigen Behörde"
+     },
+     {
+      "buchstabe": "ee",
+      "text": "Abstimmen der Vorläufigen Fassung mit dem Auftraggeber"
+     }
+    ]
+   },
+   "4": {
+    "bezeichnung": "Abgestimmte Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "",
+      "text": "Darstellen des Landschaftsrahmenplans in der mit dem Auftraggeber abgestimmten Fassung in Text und Karte."
+     }
+    ]
+   }
+  }
+ },
+ "landschaftspflegerischer_begleitplan": {
+  "anlage": "Anlage 7",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Klären der Aufgabenstellung und Ermitteln des Leistungsumfangs",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Prüfen der vom Auftraggeber zur Verfügung gestellten planungsrelevanten Unterlagen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Abgrenzen des Planungsgebiets anhand der planungsrelevanten Funktionen"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Konkretisieren weiteren Bedarfs an Daten und Unterlagen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Beraten zum Leistungsumfang für ergänzende Untersuchungen und Fachleistungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Aufstellen eines verbindlichen Arbeitsplans unter Berücksichtigung der sonstigen Fachbeiträge"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Ermitteln und Bewerten der Planungsgrundlagen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Bestandsaufnahme:Erfassen von Natur und Landschaft jeweils einschließlich des rechtlichen Schutzstatus und fachplanerischer Festsetzungen und Ziele für die Naturgüter auf Grundlage vorhandener Unterlagen und örtlicher Erhebungen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Bestandsbewertung: aa)Bewerten der Leistungsfähigkeit und Empfindlichkeit des Naturhaushalts und des Landschaftsbildes nach den Zielen und Grundsätzen des Naturschutzes und der Landschaftspflegebb)Bewerten der vorhandenen Beeinträchtigungen von Natur und Landschaft (Vorbelastung)cc)Zusammenfassendes Darstellen der Ergebnisse als Grundlage für die Erörterung mit dem Auftraggeber"
+     },
+     {
+      "buchstabe": "aa",
+      "text": "Bewerten der Leistungsfähigkeit und Empfindlichkeit des Naturhaushalts und des Landschaftsbildes nach den Zielen und Grundsätzen des Naturschutzes und der Landschaftspflege"
+     },
+     {
+      "buchstabe": "bb",
+      "text": "Bewerten der vorhandenen Beeinträchtigungen von Natur und Landschaft (Vorbelastung)"
+     },
+     {
+      "buchstabe": "cc",
+      "text": "Zusammenfassendes Darstellen der Ergebnisse als Grundlage für die Erörterung mit dem Auftraggeber"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Vorläufige Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Konfliktanalyse"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Ermitteln und Bewerten der durch das Vorhaben zu erwartenden Beeinträchtigungen des Naturhaushalts und des Landschaftsbildes nach Art, Umfang, Ort und zeitlichem Ablauf"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Konfliktminderung"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Erarbeiten von Lösungen zur Vermeidung oder Verminderung erheblicher Beeinträchtigungen des Naturhaushalts und des Landschaftsbildes in Abstimmung mit den an der Planung fachlich Beteiligten"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Ermitteln der unvermeidbaren Beeinträchtigungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Erarbeiten und Begründen von Maßnahmen des Naturschutzes und der Landschaftspflege, insbesondere Ausgleichs-, Ersatz- und Gestaltungsmaßnahmen sowie von Angaben zur Unterhaltung dem Grunde nach und Vorschläge zur rechtlichen Sicherung von Ausgleichs- und Ersatzmaßnahmen"
+     },
+     {
+      "buchstabe": "g",
+      "text": "Integrieren von Maßnahmen auf Grund des Natura 2000-Gebietsschutzes sowie auf Grund der Vorschriften zum besonderen Artenschutz und anderer Umweltfachgesetze auf Grundlage vorhandener Unterlagen und Erarbeiten eines Gesamtkonzepts"
+     },
+     {
+      "buchstabe": "h",
+      "text": "Vergleichendes Gegenüberstellen von unvermeidbaren Beeinträchtigungen und Ausgleich und Ersatz einschließlich Darstellen verbleibender, nicht ausgleichbarer oder ersetzbarer Beeinträchtigungen"
+     },
+     {
+      "buchstabe": "i",
+      "text": "Kostenermittlung nach Vorgaben des Auftraggebers"
+     },
+     {
+      "buchstabe": "j",
+      "text": "Zusammenfassendes Darstellen der Ergebnisse in Text und Karte"
+     },
+     {
+      "buchstabe": "k",
+      "text": "Mitwirken bei der Abstimmung mit der für Naturschutz und Landschaftspflege zuständigen Behörde"
+     },
+     {
+      "buchstabe": "l",
+      "text": "Abstimmen der Vorläufigen Fassung mit dem Auftraggeber"
+     }
+    ]
+   },
+   "4": {
+    "bezeichnung": "Abgestimmte Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "",
+      "text": "Darstellen des Landschaftspflegerischen Begleitplans in der mit dem Auftraggeber abgestimmten Fassung in Text und Karte."
+     }
+    ]
+   }
+  }
+ },
+ "pflege_entwicklungsplan": {
+  "anlage": "Anlage 8",
+  "phasen": {
+   "1": {
+    "bezeichnung": "Klären der Aufgabenstellung und Ermitteln des Leistungsumfangs",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Zusammenstellen und Prüfen der vom Auftraggeber zur Verfügung gestellten planungsrelevanten Unterlagen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Ortsbesichtigungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Abgrenzen des Planungsgebiets anhand der planungsrelevanten Funktionen"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Konkretisieren weiteren Bedarfs an Daten und Unterlagen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Beraten zum Leistungsumfang für ergänzende Untersuchungen und Fachleistungen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Aufstellen eines verbindlichen Arbeitsplans unter Berücksichtigung der sonstigen Fachbeiträge"
+     }
+    ]
+   },
+   "2": {
+    "bezeichnung": "Ermitteln der Planungsgrundlagen",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Ermitteln und Beschreiben der planungsrelevanten Sachverhalte auf Grund vorhandener Unterlagen"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Auswerten und Einarbeiten von Fachbeiträgen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Bewerten der Bestandsaufnahmen einschließlich vorhandener Beeinträchtigungen sowie der abiotischen Faktoren hinsichtlich ihrer Standort- und Lebensraumbedeutung nach den Zielen und Grundsätzen des Naturschutzes"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Beschreiben der Zielkonflikte mit bestehenden Nutzungen"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Beschreiben des zu erwartenden Zustands von Arten und ihren Lebensräumen (Zielkonflikte mit geplanten Nutzungen)"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Überprüfen der festgelegten Untersuchungsinhalte"
+     },
+     {
+      "buchstabe": "g",
+      "text": "Zusammenfassendes Darstellen von Erfassung und Bewertung in Text und Karte"
+     }
+    ]
+   },
+   "3": {
+    "bezeichnung": "Vorläufige Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "a",
+      "text": "Lösen der Planungsaufgabe und Erläutern der Ziele, Erfordernisse und Maßnahmen in Text und Karte"
+     },
+     {
+      "buchstabe": "b",
+      "text": "Formulieren von Zielen zum Schutz, zur Pflege, zur Erhaltung und Entwicklung von Arten, Biotoptypen und naturnahen Lebensräumen bzw. Standortbedingungen"
+     },
+     {
+      "buchstabe": "c",
+      "text": "Erfassen und Darstellen von Flächen, auf denen eine Nutzung weiter betrieben werden soll und von Flächen, auf denen regelmäßig Pflegemaßnahmen durchzuführen sind sowie von Maßnahmen zur Verbesserung der ökologischen Standortverhältnisse und zur Änderung der Biotopstruktur"
+     },
+     {
+      "buchstabe": "d",
+      "text": "Erarbeiten von Vorschlägen für Maßnahmen zur Förderung bestimmter Tier- und Pflanzenarten, zur Lenkung des Besucherverkehrs, für die Durchführung der Pflege- und Entwicklungsmaßnahmen und für Änderungen von Schutzzweck und -zielen sowie Grenzen von Schutzgebieten"
+     },
+     {
+      "buchstabe": "e",
+      "text": "Erarbeiten von Hinweisen für weitere wissenschaftliche Untersuchungen (Monitoring), Folgeplanungen und Maßnahmen"
+     },
+     {
+      "buchstabe": "f",
+      "text": "Kostenermittlung"
+     },
+     {
+      "buchstabe": "g",
+      "text": "Abstimmen der Vorläufigen Fassung mit dem Auftraggeber"
+     }
+    ]
+   },
+   "4": {
+    "bezeichnung": "Abgestimmte Fassung",
+    "leistungen": [
+     {
+      "buchstabe": "",
+      "text": "Darstellen des Pflege- und Entwicklungsplans in der mit dem Auftraggeber abgestimmten Fassung in Text und Karte."
+     }
+    ]
+   }
+  }
+ },
  "gebaeude": {
   "anlage": "Anlage 10",
   "phasen": {

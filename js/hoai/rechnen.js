@@ -106,6 +106,56 @@ export function wiederholungsminderung(nr) {
 /** Leistungsphasen, die § 11 Abs. 3 mindert. */
 export const GEMINDERTE_PHASEN = [1, 2, 3, 4, 5, 6];
 
+/**
+ * Einzelbeauftragung nach § 9 — keine Deckelung, sondern eine Anhebung.
+ *
+ * "Wird die Vorplanung oder Entwurfsplanung … als Einzelleistung in Auftrag
+ * gegeben, koennen fuer die Leistungsbewertung der jeweiligen Leistungsphase
+ *   1. fuer die Vorplanung hoechstens der Prozentsatz der Vorplanung und der
+ *      Prozentsatz der Grundlagenermittlung und
+ *   2. fuer die Entwurfsplanung hoechstens der Prozentsatz der Entwurfsplanung
+ *      und der Prozentsatz der Vorplanung
+ * zum Zweck der Honorarberechnung herangezogen werden."
+ *
+ * Der Gedanke dahinter: Wer nur die Vorplanung liefert, muss die
+ * Grundlagenermittlung trotzdem leisten — sonst hat er nichts, worauf er
+ * aufbauen kann. Die Verordnung erlaubt deshalb, ihren Prozentsatz
+ * mitzuberechnen. "Hoechstens" ist die Obergrenze, nicht der Regelfall; zu
+ * vereinbaren ist es in Textform.
+ *
+ * Absatz 3 regelt dasselbe fuer die Objektueberwachung bei Gebaeuden und
+ * Technischer Ausruestung: dort kommen Grundlagenermittlung UND Vorplanung
+ * hinzu.
+ */
+export const EINZELLEISTUNG = {
+  KEINE: '',
+  VORPLANUNG: 'vorplanung',
+  ENTWURFSPLANUNG: 'entwurfsplanung',
+  OBJEKTUEBERWACHUNG: 'objektueberwachung',
+};
+
+export const EINZELLEISTUNG_TEXT = {
+  vorplanung: 'Vorplanung als Einzelleistung (§ 9 Abs. 1 Nr. 1)',
+  entwurfsplanung: 'Entwurfsplanung als Einzelleistung (§ 9 Abs. 1 Nr. 2)',
+  objektueberwachung: 'Objektüberwachung als Einzelleistung (§ 9 Abs. 3)',
+};
+
+/**
+ * Welche Phase wird angehoben, und um die Prozentsaetze welcher Phasen?
+ * @returns {{phase:number, zusatz:number[]}|null}
+ */
+export function einzelleistungAnhebung(art) {
+  return ({
+    vorplanung: { phase: 2, zusatz: [1] },
+    entwurfsplanung: { phase: 3, zusatz: [2] },
+    objektueberwachung: { phase: 8, zusatz: [1, 2] },
+  })[art] || null;
+}
+
+/** § 9 Abs. 3 gilt nur fuer Gebaeude und Technische Ausruestung. */
+export const OBJEKTUEBERWACHUNG_EINZELN_MOEGLICH =
+  ['gebaeude', 'innenraeume', 'technische_ausruestung'];
+
 export const ANRECHNUNG = {
   VOLL: 'voll',                 // vollstaendig anrechenbar
   ANTEILIG: 'anteilig',         // mit einem vereinbarten Prozentsatz
@@ -255,6 +305,32 @@ export function anrechenbareKosten(k) {
  * @param {number} p.satzAnteil     0 = Mindest-/Basissatz … 1 = Hoechstsatz
  * @param {number} p.fassung        2013 oder 2021 (nur fuer die Benennung)
  */
+const HEKTAR = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
+
+/**
+ * Wie die Bezugsgroesse der Tafel heisst und wie sie geschrieben wird.
+ *
+ * Die Honorartafeln der Flaechenplanung (§§ 20, 21, 28 bis 32) sind nach Hektar
+ * gestaffelt, nicht nach Euro. Stuende in ihrer Herleitung "anrechenbare Kosten
+ * 5,00 €", waere das nicht nur ein Schoenheitsfehler: Die Herleitung ist das,
+ * was auf der Rechnung erscheint und was der Auftraggeber pruefen soll.
+ */
+function bezug(tafel) {
+  return tafel.bezugsart === 'flaeche_hektar'
+    ? {
+      name: 'Fläche des Plangebiets',
+      kurz: 'Fläche (F)',
+      trifft: 'die Fläche trifft einen Tafelwert',
+      zeigen: (x) => `${HEKTAR.format(x)} ha`,
+    }
+    : {
+      name: 'anrechenbare Kosten',
+      kurz: 'anrechenbare Kosten (AG)',
+      trifft: 'anrechenbare Kosten treffen einen Tafelwert',
+      zeigen: (x) => eur(x),
+    };
+}
+
 export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung = 2021 }) {
   const lb = LEISTUNGSBILDER[leistungsbild];
   if (!lb) throw new Error(`Unbekanntes Leistungsbild: ${leistungsbild}`);
@@ -276,10 +352,12 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
   // Bereich keine Werte vor; das Honorar ist dort frei zu vereinbaren. Ein Programm,
   // das trotzdem eine Zahl liefert, taeuscht eine Grundlage vor, die es nicht gibt.
   if (kosten < kleinste || kosten > groesste) {
+    const b = bezug(tafel);
     const e = new Error(
-      `Anrechenbare Kosten ${eur(kosten)} liegen außerhalb der Honorartafel ${tafel.paragraf} `
-      + `(${eur(kleinste)} bis ${eur(groesste)}). In diesem Bereich ist das Honorar frei zu vereinbaren — `
-      + `als Pauschal- oder Zeithonorar erfassen.`,
+      `${b.name[0].toUpperCase()}${b.name.slice(1)} ${b.zeigen(kosten)} liegen außerhalb der `
+      + `Honorartafel ${tafel.paragraf} (${b.zeigen(kleinste)} bis ${b.zeigen(groesste)}). `
+      + 'In diesem Bereich ist das Honorar frei zu vereinbaren — als Pauschal- oder '
+      + 'Zeithonorar erfassen.',
     );
     e.code = 'AUSSERHALB_TAFEL';
     e.grenzen = { von: kleinste, bis: groesste };
@@ -288,6 +366,7 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
 
   const satzName = satzBezeichnung(fassung, satzAnteil);
   const zoneRoem = ZONE_ROEMISCH[zone];
+  const bezugsgroesse = bezug(tafel);
   const herleitung = [];
 
   // Stuetzstellen suchen
@@ -296,8 +375,8 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
     const [min, max] = treffer.zonen[zone - 1];
     const betrag = runde2(min + (max - min) * satzAnteil);
     herleitung.push(
-      werte(`Honorartafel ${tafel.paragraf} — anrechenbare Kosten treffen einen Tafelwert`, [
-        { bez: 'anrechenbare Kosten', wert: eur(kosten) },
+      werte(`Honorartafel ${tafel.paragraf} — ${bezugsgroesse.trifft}`, [
+        { bez: bezugsgroesse.name, wert: bezugsgroesse.zeigen(kosten) },
         { bez: `Honorarzone (HZ)`, wert: zoneRoem },
         { bez: `Honorarsatz (HS)`, wert: `${satzName} (${prozent(satzAnteil)})` },
         { bez: 'unterer Tafelwert', wert: eur(min) },
@@ -321,13 +400,13 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
 
   herleitung.push(
     werte(`Interpolation gemäß Honorartafel ${tafel.paragraf}`, [
-      { bez: 'anrechenbare Kosten (AG)', wert: eur(kosten) },
+      { bez: bezugsgroesse.kurz, wert: bezugsgroesse.zeigen(kosten) },
       { bez: 'Honorarzone (HZ)', wert: zoneRoem },
       { bez: 'Honorarsatz (HS)', wert: `${satzName} (${prozent(satzAnteil)})` },
-      { bez: 'unterer Wert lt. Honorartafel (UW)', wert: eur(unten.bezug) },
+      { bez: 'unterer Wert lt. Honorartafel (UW)', wert: bezugsgroesse.zeigen(unten.bezug) },
       { bez: 'Honorar für unteren Wert, unterer Satz (HUWmin)', wert: eur(huwMin) },
       { bez: 'Honorar für unteren Wert, oberer Satz (HUWmax)', wert: eur(huwMax) },
-      { bez: 'oberer Wert lt. Honorartafel (OW)', wert: eur(oben.bezug) },
+      { bez: 'oberer Wert lt. Honorartafel (OW)', wert: bezugsgroesse.zeigen(oben.bezug) },
       { bez: 'Honorar für oberen Wert, unterer Satz (HOWmin)', wert: eur(howMin) },
       { bez: 'Honorar für oberen Wert, oberer Satz (HOWmax)', wert: eur(howMax) },
     ]),
@@ -335,9 +414,10 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
       `${eur(huwMin)} + (${eur(huwMax)} − ${eur(huwMin)}) × ${prozent(satzAnteil)}`, eur(huw)),
     formel('HOW = HOWmin + (HOWmax − HOWmin) × HS',
       `${eur(howMin)} + (${eur(howMax)} − ${eur(howMin)}) × ${prozent(satzAnteil)}`, eur(how)),
-    formel('GH = HUW + (HOW − HUW) × [(AG − UW) : (OW − UW)]',
-      `${eur(huw)} + (${eur(how)} − ${eur(huw)}) × [(${eur(kosten)} − ${eur(unten.bezug)}) : `
-      + `(${eur(oben.bezug)} − ${eur(unten.bezug)})]`, eur(betrag)),
+    formel(`GH = HUW + (HOW − HUW) × [(${bezugsgroesse.kurz.match(/\(([^)]+)\)/)?.[1] || 'AG'} − UW) : (OW − UW)]`,
+      `${eur(huw)} + (${eur(how)} − ${eur(huw)}) × [(${bezugsgroesse.zeigen(kosten)} − `
+      + `${bezugsgroesse.zeigen(unten.bezug)}) : (${bezugsgroesse.zeigen(oben.bezug)} − `
+      + `${bezugsgroesse.zeigen(unten.bezug)})]`, eur(betrag)),
   );
 
   return { betrag, herleitung, tafel: tafel.paragraf };
@@ -346,6 +426,90 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
 // ————————————————————————————————————————————————————————————————
 // 3 Leistungsphasen
 // ————————————————————————————————————————————————————————————————
+
+/**
+ * Bezugsgroesse der Flaechenplanung: die Flaeche des Plangebiets in Hektar.
+ *
+ * Baut dieselbe Form wie anrechenbareKosten(), damit der weitere Rechenweg
+ * nicht unterscheiden muss — nur die Herleitung sieht anders aus, weil es
+ * nichts nach DIN 276 zu gliedern gibt.
+ */
+function flaecheAlsBezug(v) {
+  const ha = v.flaecheHektar;
+  if (!Number.isFinite(ha) || ha <= 0) {
+    throw new Error(
+      'Für dieses Leistungsbild ist die Fläche des Plangebiets in Hektar anzugeben '
+      + '(§ 6 Abs. 1 Nr. 1 HOAI), nicht die anrechenbaren Kosten.',
+    );
+  }
+  return {
+    betrag: ha,
+    herleitung: [werte('Bemessungsgrundlage — Fläche des Plangebiets', [
+      { bez: 'Fläche', wert: `${HEKTAR.format(ha)} ha` },
+      ...(v.flaecheBemerkung ? [{ bez: 'Anmerkung', wert: v.flaecheBemerkung }] : []),
+    ])],
+  };
+}
+
+/**
+ * Grundhonorar bei Anlagen verschiedener Honorarzonen — § 56 Abs. 4 HOAI.
+ *
+ * Die Vorschrift ist umstaendlich formuliert und meint etwas Einfaches: Jede
+ * Zone bekommt das Honorar, das sich ergaebe, wenn die GESAMTEN anrechenbaren
+ * Kosten dieser Zone zugeordnet waeren — davon aber nur den Anteil, den ihre
+ * Anlagen an den Gesamtkosten haben.
+ *
+ * Der Grund fuer diesen Umweg ist die Degression der Honorartafel: Wuerde man
+ * je Zone nur mit ihren eigenen Kosten rechnen, fiele jede Teilsumme in einen
+ * niedrigeren Tafelbereich mit hoeherem Prozentsatz — und das Gesamthonorar
+ * laege ueber dem, was dieselbe Anlage aus einer Hand kostet. Die Verordnung
+ * verhindert genau das.
+ *
+ * @param {object} p
+ * @param {string} p.leistungsbild
+ * @param {Array}  p.gruppen  [{zone, kosten, bezeichnung?}]
+ * @param {number} p.satzAnteil
+ * @param {number} p.fassung
+ */
+export function honorarNachAnlagengruppen({ leistungsbild, gruppen, satzAnteil, fassung = 2021 }) {
+  if (!gruppen?.length) throw new Error('Keine Anlagengruppen angegeben.');
+  const gesamt = runde2(gruppen.reduce((s, g) => s + (g.kosten || 0), 0));
+  if (gesamt <= 0) throw new Error('Die anrechenbaren Kosten der Anlagengruppen sind null.');
+
+  const zeilen = [];
+  let summe = 0;
+  for (const g of gruppen) {
+    if (!(g.kosten > 0)) continue;
+    const anteil = g.kosten / gesamt;
+    // Honorar, als gehoerte die GESAMTE Summe in diese Zone
+    const voll = grundhonorar({
+      leistungsbild, kosten: gesamt, zone: g.zone, satzAnteil, fassung,
+    });
+    const betrag = runde2(voll.betrag * anteil);
+    summe = runde2(summe + betrag);
+    zeilen.push({
+      ...g, anteil, honorarVoll: voll.betrag, betrag,
+    });
+  }
+
+  return {
+    betrag: summe,
+    gesamtkosten: gesamt,
+    zeilen,
+    herleitung: [tabelle(
+      'Anlagen verschiedener Honorarzonen — § 56 Abs. 4 HOAI',
+      ['Anlagengruppe', 'Zone', 'anrechenbare Kosten', 'Anteil', 'Honorar bei voller Summe', 'Einzelhonorar'],
+      zeilen.map((z) => [
+        z.bezeichnung || '', ZONE_ROEMISCH[z.zone], eur(z.kosten),
+        prozent(z.anteil), eur(z.honorarVoll), eur(z.betrag),
+      ]),
+      ['Summe', '', eur(gesamt), '100 %', '', eur(summe)],
+      ['Je Zone wird das Honorar für die gesamten anrechenbaren Kosten ermittelt und '
+        + 'nach dem Kostenanteil dieser Zone gewichtet. Ohne diesen Umweg fiele jede '
+        + 'Teilsumme in einen niedrigeren Tafelbereich und das Honorar läge zu hoch.'],
+    )],
+  };
+}
 
 /**
  * Verteilt das Grundhonorar auf die Leistungsphasen.
@@ -370,9 +534,15 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
  *                           (§ 12 Abs. 2). Erhoeht wird die BEWERTUNG, nicht der
  *                           vereinbarte Anteil — nur so bleibt eine
  *                           Teilbeauftragung dieser Phase richtig gerechnet.
+ * @param {object} [p.phasenaufschlaege] {2: 0.02} schlaegt zwei Prozentpunkte
+ *                           auf die Bewertung der Phase 2 auf (§ 9). Anders als
+ *                           der Zuschlag ist das ein absoluter Wert: Es geht um
+ *                           den Prozentsatz einer ANDEREN Phase, nicht um einen
+ *                           Anteil der eigenen.
  */
 export function leistungsphasen({
-  leistungsbild, grundhonorar100, phasen, fassung = 2021, phasenzuschlaege = {},
+  leistungsbild, grundhonorar100, phasen, fassung = 2021,
+  phasenzuschlaege = {}, phasenaufschlaege = {},
 }) {
   const lb = LEISTUNGSBILDER[leistungsbild];
   if (!lb) throw new Error(`Unbekanntes Leistungsbild: ${leistungsbild}`);
@@ -384,10 +554,11 @@ export function leistungsphasen({
   for (const nr of Object.keys(lb.phasen).map(Number).sort((a, b) => a - b)) {
     const grundbewertung = lb.phasen[nr];
     const zuschlag = phasenzuschlaege[nr] || 0;
+    const aufschlag = phasenaufschlaege[nr] || 0;
     // Auf vier Nachkommastellen: Die Bewertungen der HOAI sind ganze Prozent,
     // ein Zuschlag von 50 Prozent darauf ergibt halbe. Weiter zu runden hiesse
     // Cent zu verlieren, weniger zu runden schleppt Gleitkommareste mit.
-    const voll = Math.round(grundbewertung * (1 + zuschlag) * 10000) / 10000;
+    const voll = Math.round((grundbewertung * (1 + zuschlag) + aufschlag) * 10000) / 10000;
     const eingabe = (phasen || []).find((p) => p.nr === nr);
     const vereinbart = eingabe ? (eingabe.vereinbart ?? voll) : 0;
     const erbrachtAnteil = eingabe ? (eingabe.erbracht ?? 1) : 0;
@@ -418,6 +589,7 @@ export function leistungsphasen({
       bewertung: voll,
       grundbewertung,
       zuschlag,
+      aufschlag,
       vereinbart,
       betragVereinbart,
       erbrachtAnteil,
@@ -476,8 +648,34 @@ export function honorarermittlung(v) {
 
   const herleitung = [];
 
-  const ak = anrechenbareKosten(v.kostenermittlung);
-  const gh = grundhonorar({
+  // § 6 Abs. 1: Die Bemessungsgrundlage haengt am Leistungsbild. Objekt- und
+  // Fachplanung rechnen nach anrechenbaren Kosten, die Flaechenplanung nach der
+  // Flaeche des Plangebiets in Hektar. Beides landet in derselben Tafelabfrage —
+  // die Tafel weiss selbst, worauf sich ihre Stuetzstellen beziehen.
+  const nachFlaeche = lb.bezugsart === 'flaeche_hektar';
+  const ak = nachFlaeche
+    ? flaecheAlsBezug(v)
+    : anrechenbareKosten(v.kostenermittlung);
+
+  // § 56 Abs. 4: Anlagen einer Gruppe in verschiedenen Honorarzonen. Dann tritt
+  // die Summe der Einzelhonorare an die Stelle des einen Grundhonorars.
+  const nachGruppen = v.anlagengruppen?.length
+    ? honorarNachAnlagengruppen({
+      leistungsbild: v.leistungsbild,
+      gruppen: v.anlagengruppen,
+      satzAnteil: v.honorarsatz,
+      fassung: v.fassung,
+    })
+    : null;
+
+  if (nachGruppen && v.leistungsbild !== 'technische_ausruestung') {
+    throw new Error(
+      '§ 56 Abs. 4 gilt für die Technische Ausrüstung. Für andere Leistungsbilder ist '
+      + 'das Honorar je Objekt getrennt zu berechnen (§ 11 Abs. 1).',
+    );
+  }
+
+  const gh = nachGruppen || grundhonorar({
     leistungsbild: v.leistungsbild,
     kosten: ak.betrag,
     zone: v.honorarzone,
@@ -510,12 +708,44 @@ export function honorarermittlung(v) {
     phasenzuschlaege[8] = ouZuschlag;
   }
 
+  // § 9: Einzelbeauftragung von Vorplanung, Entwurfsplanung oder
+  // Objektueberwachung. Die betroffene Phase darf um die Prozentsaetze der
+  // vorgelagerten Phasen angehoben werden — sie sind zu leisten, auch wenn sie
+  // nicht gesondert beauftragt sind.
+  const phasenaufschlaege = {};
+  if (v.einzelleistung) {
+    const a = einzelleistungAnhebung(v.einzelleistung);
+    if (!a) throw new Error(`Unbekannte Einzelleistung: ${v.einzelleistung}`);
+    if (v.einzelleistung === 'objektueberwachung'
+        && !OBJEKTUEBERWACHUNG_EINZELN_MOEGLICH.includes(v.leistungsbild)) {
+      throw new Error(
+        '§ 9 Abs. 3 gilt nur für Gebäude, Innenräume und die Technische Ausrüstung — '
+        + `nicht für ${lb.bezeichnung}.`,
+      );
+    }
+    // Nur anheben, wenn die zusaetzlichen Phasen NICHT ohnehin beauftragt sind.
+    // Sonst zaehlte man sie doppelt.
+    const beauftragt = new Set((v.phasen || []).map((p) => p.nr));
+    const anrechenbar = a.zusatz.filter((nr) => !beauftragt.has(nr));
+    const summe = anrechenbar.reduce((s, nr) => s + (lb.phasen[nr] || 0), 0);
+    if (summe > 0) {
+      phasenaufschlaege[a.phase] = Math.round(summe * 10000) / 10000;
+    }
+    if (a.zusatz.length !== anrechenbar.length) {
+      herleitung.push(hinweis(
+        `§ 9: ${a.zusatz.filter((nr) => beauftragt.has(nr)).map((nr) => `LPh ${nr}`).join(' und ')} `
+        + 'ist bereits gesondert beauftragt und wird nicht zusätzlich angerechnet.',
+      ));
+    }
+  }
+
   const lph = leistungsphasen({
     leistungsbild: v.leistungsbild,
     grundhonorar100: gh.betrag,
     phasen: v.phasen,
     fassung: v.fassung,
     phasenzuschlaege,
+    phasenaufschlaege,
   });
 
   // Reihenfolge der Herleitung folgt dem Rechenweg: erst die anrechenbaren Kosten,
@@ -529,6 +759,24 @@ export function honorarermittlung(v) {
     ]));
   }
   herleitung.push(...gh.herleitung);
+  if (v.einzelleistung && Object.keys(phasenaufschlaege).length) {
+    const a = einzelleistungAnhebung(v.einzelleistung);
+    const zusatz = a.zusatz.filter((nr) => !(v.phasen || []).some((p) => p.nr === nr));
+    herleitung.push(werte(
+      EINZELLEISTUNG_TEXT[v.einzelleistung],
+      [
+        { bez: `Bewertung ${lb.namen[a.phase]} nach der Verordnung`, wert: prozent(lb.phasen[a.phase]) },
+        ...zusatz.map((nr) => ({
+          bez: `+ Prozentsatz ${lb.namen[nr]}`,
+          wert: prozent(lb.phasen[nr]),
+        })),
+        {
+          bez: 'Bewertung danach (Höchstwert nach § 9)',
+          wert: prozent(Math.round((lb.phasen[a.phase] + phasenaufschlaege[a.phase]) * 10000) / 10000),
+        },
+      ],
+    ));
+  }
   if (ouZuschlag) {
     herleitung.push(werte(
       `Erhöhung der ${lb.namen[8]} nach § 12 Abs. 2 HOAI`,
@@ -608,6 +856,49 @@ export function honorarermittlung(v) {
     zuschlaege.push({ ...z, betrag });
   }
 
+  // ── Wiederholte Grundleistungen (§ 10 Abs. 2) ─────────
+  // "Einigen sich Auftraggeber und Auftragnehmer ueber die Wiederholung von
+  // Grundleistungen, ohne dass sich dadurch die anrechenbaren Kosten … aendern,
+  // ist das Honorar fuer diese Grundleistungen entsprechend ihrem Anteil an der
+  // jeweiligen Leistungsphase in Textform zu vereinbaren."
+  //
+  // Der praktische Fall: Der Bauherr will die Entwurfsplanung noch einmal
+  // anders. Die anrechenbaren Kosten bleiben gleich, also traegt die
+  // Honorartafel nichts bei — verguetet wird der Anteil der wiederholten
+  // Grundleistungen an ihrer Phase. Ohne diese Vorschrift arbeitete man umsonst.
+  const wiederholungen10 = [];
+  let summeWiederholung = 0;
+  for (const w of v.wiederholteGrundleistungen || []) {
+    const bewertung = lb.phasen[w.phase];
+    if (bewertung === undefined) {
+      throw new Error(`Wiederholte Grundleistung: ${lb.bezeichnung} hat keine Leistungsphase ${w.phase}.`);
+    }
+    if (!Number.isFinite(w.anteil) || w.anteil <= 0 || w.anteil > 1 + 1e-9) {
+      throw new Error(
+        `Wiederholte Grundleistung in LPh ${w.phase}: Der Anteil muss zwischen 0 und 100 % `
+        + 'der Leistungsphase liegen (§ 10 Abs. 2).',
+      );
+    }
+    const betrag = runde2(gh.betrag * bewertung * w.anteil);
+    summeWiederholung = runde2(summeWiederholung + betrag);
+    wiederholungen10.push({ ...w, bewertung, betrag });
+  }
+  if (wiederholungen10.length) {
+    herleitung.push(tabelle(
+      'Wiederholung von Grundleistungen — § 10 Abs. 2 HOAI',
+      ['Leistungsphase', 'Wiederholte Leistung', 'Anteil an der Phase', 'Betrag'],
+      wiederholungen10.map((w) => [
+        `LPh ${w.phase} ${lb.namen[w.phase] || ''}`,
+        w.bezeichnung || '',
+        prozent(w.anteil),
+        eur(w.betrag),
+      ]),
+      ['', '', 'Summe', eur(summeWiederholung)],
+      ['Die anrechenbaren Kosten ändern sich dadurch nicht — vergütet wird der '
+        + 'Anteil der wiederholten Grundleistungen an ihrer Leistungsphase.'],
+    ));
+  }
+
   // Weitere Positionen: Zeithonorar, Pauschalen, Besondere Leistungen
   const weitere = [];
   let summeWeitere = 0;
@@ -627,7 +918,7 @@ export function honorarermittlung(v) {
   }
 
   // Nebenkosten
-  const basisNebenkosten = runde2(grundleistungen + summeZuschlaege + summeWeitere);
+  const basisNebenkosten = runde2(grundleistungen + summeZuschlaege + summeWiederholung + summeWeitere);
   let nebenkosten = 0;
   const nk = v.nebenkosten;
   if (nk && nk.art === 'pauschal') {
@@ -645,7 +936,7 @@ export function honorarermittlung(v) {
       ['Summe der Nebenkosten', eur(nebenkosten)]));
   }
 
-  const netto = runde2(grundleistungen + summeZuschlaege + summeWeitere + nebenkosten);
+  const netto = runde2(grundleistungen + summeZuschlaege + summeWiederholung + summeWeitere + nebenkosten);
 
   const zusammenstellung = [
     {
@@ -655,6 +946,10 @@ export function honorarermittlung(v) {
       betrag: grundleistungen,
     },
     ...zuschlaege.map((z) => ({ bez: `+ ${z.bezeichnung}`, betrag: z.betrag })),
+    ...wiederholungen10.map((w) => ({
+      bez: `+ Wiederholung LPh ${w.phase}${w.bezeichnung ? ` — ${w.bezeichnung}` : ''}`,
+      betrag: w.betrag,
+    })),
     ...weitere.map((p) => ({ bez: `+ ${p.bezeichnung}`, betrag: p.betrag })),
     { bez: '+ Nebenkosten', betrag: nebenkosten },
     { bez: '= Gesamt netto', betrag: netto, summe: true },
@@ -671,6 +966,7 @@ export function honorarermittlung(v) {
     grundleistungenJeObjekt: lph.erbracht,
     wiederholungen,
     objekte: objektzeilen,
+    wiederholteGrundleistungen: wiederholungen10,
     zuschlaege,
     weiterePositionen: weitere,
     nebenkosten,

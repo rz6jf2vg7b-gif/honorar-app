@@ -12,6 +12,8 @@
 // Mensch. Ein Programm, das hier selbsttaetig 30 statt 40 Prozent ansetzt, erzeugt
 // eine falsche Rechnung, die niemand bemerkt.
 
+import { TAFELN } from './tafeln.js';
+
 /** Bezeichnungen der Leistungsphasen. Weicht je Leistungsbild ab (LPh 8!). */
 const LPH_NAMEN_OBJEKT = {
   1: 'Grundlagenermittlung',
@@ -26,11 +28,28 @@ const LPH_NAMEN_OBJEKT = {
 };
 
 const LPH_NAMEN_BAUOBERLEITUNG = { ...LPH_NAMEN_OBJEKT, 8: 'Bauoberleitung' };
+
+// Die Flaechenplanung hat eine ganz andere Gliederung: drei bzw. vier Phasen
+// statt neun, und sie rechnet nach der Flaeche des Plangebiets in Hektar
+// (§ 6 Abs. 1 Nr. 1) statt nach anrechenbaren Kosten.
+const LPH_NAMEN_BAULEITPLANUNG = {
+  1: 'Vorentwurf für die frühzeitigen Beteiligungen',
+  2: 'Entwurf zur öffentlichen Auslegung',
+  3: 'Plan zur Beschlussfassung',
+};
+
+const LPH_NAMEN_LANDSCHAFT = {
+  1: 'Klären der Aufgabenstellung und Ermitteln des Leistungsumfangs',
+  2: 'Ermitteln der Planungsgrundlagen',
+  3: 'Vorläufige Fassung',
+  4: 'Abgestimmte Fassung',
+};
 const LPH_NAMEN_TGA = { ...LPH_NAMEN_OBJEKT, 8: 'Objektüberwachung – Bauüberwachung' };
 
 export const LEISTUNGSBILDER = {
   gebaeude: {
     bezeichnung: 'Gebäude',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 34',
     tafel: 'gebaeude',
     tafelParagraf: '§ 35',
@@ -43,6 +62,7 @@ export const LEISTUNGSBILDER = {
 
   innenraeume: {
     bezeichnung: 'Innenräume',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 34',
     tafel: 'gebaeude',
     tafelParagraf: '§ 35',
@@ -58,6 +78,7 @@ export const LEISTUNGSBILDER = {
 
   freianlagen: {
     bezeichnung: 'Freianlagen',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 39',
     tafel: 'freianlagen',
     tafelParagraf: '§ 40',
@@ -68,6 +89,7 @@ export const LEISTUNGSBILDER = {
 
   ingenieurbauwerke: {
     bezeichnung: 'Ingenieurbauwerke',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 43',
     tafel: 'ingenieurbauwerke',
     tafelParagraf: '§ 44',
@@ -88,6 +110,7 @@ export const LEISTUNGSBILDER = {
 
   verkehrsanlagen: {
     bezeichnung: 'Verkehrsanlagen',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 47',
     tafel: 'verkehrsanlagen',
     tafelParagraf: '§ 48',
@@ -100,6 +123,7 @@ export const LEISTUNGSBILDER = {
 
   tragwerksplanung: {
     bezeichnung: 'Tragwerksplanung',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 51',
     tafel: 'tragwerksplanung',
     tafelParagraf: '§ 52',
@@ -120,6 +144,7 @@ export const LEISTUNGSBILDER = {
 
   technische_ausruestung: {
     bezeichnung: 'Technische Ausrüstung',
+    bezugsart: 'anrechenbare_kosten',
     leistungsbildParagraf: '§ 55',
     tafel: 'technische_ausruestung',
     tafelParagraf: '§ 56',
@@ -135,6 +160,82 @@ export const LEISTUNGSBILDER = {
     umbauzuschlagBis: 0.50,
     umbauzuschlagFundstelle: '§ 56 Abs. 5',
   },
+
+  // ── Flächenplanung ────────────────────────────────────
+  // Bemessungsgrundlage ist die Fläche des Plangebiets in Hektar, nicht die
+  // anrechenbaren Kosten (§ 6 Abs. 1 Nr. 1). Drei Honorarzonen statt fünf.
+
+  flaechennutzungsplan: {
+    bezeichnung: 'Flächennutzungsplan',
+    leistungsbildParagraf: '§ 18',
+    tafel: 'flaechennutzungsplan',
+    tafelParagraf: '§ 20',
+    bezugsart: 'flaeche_hektar',
+    namen: LPH_NAMEN_BAULEITPLANUNG,
+    phasen: { 1: 0.60, 2: 0.30, 3: 0.10 },
+  },
+
+  bebauungsplan: {
+    bezeichnung: 'Bebauungsplan',
+    leistungsbildParagraf: '§ 19',
+    tafel: 'bebauungsplan',
+    tafelParagraf: '§ 21',
+    bezugsart: 'flaeche_hektar',
+    namen: LPH_NAMEN_BAULEITPLANUNG,
+    phasen: { 1: 0.60, 2: 0.30, 3: 0.10 },
+  },
+
+  landschaftsplan: {
+    bezeichnung: 'Landschaftsplan',
+    leistungsbildParagraf: '§ 23',
+    tafel: 'landschaftsplan',
+    tafelParagraf: '§ 28',
+    bezugsart: 'flaeche_hektar',
+    namen: LPH_NAMEN_LANDSCHAFT,
+    phasen: { 1: 0.03, 2: 0.37, 3: 0.50, 4: 0.10 },
+  },
+
+  gruenordnungsplan: {
+    bezeichnung: 'Grünordnungsplan',
+    leistungsbildParagraf: '§ 24',
+    tafel: 'gruenordnungsplan',
+    tafelParagraf: '§ 29',
+    bezugsart: 'flaeche_hektar',
+    namen: LPH_NAMEN_LANDSCHAFT,
+    phasen: { 1: 0.03, 2: 0.37, 3: 0.50, 4: 0.10 },
+  },
+
+  landschaftsrahmenplan: {
+    bezeichnung: 'Landschaftsrahmenplan',
+    leistungsbildParagraf: '§ 25',
+    tafel: 'landschaftsrahmenplan',
+    tafelParagraf: '§ 30',
+    bezugsart: 'flaeche_hektar',
+    namen: LPH_NAMEN_LANDSCHAFT,
+    phasen: { 1: 0.03, 2: 0.37, 3: 0.50, 4: 0.10 },
+  },
+
+  landschaftspflegerischer_begleitplan: {
+    bezeichnung: 'Landschaftspflegerischer Begleitplan',
+    leistungsbildParagraf: '§ 26',
+    tafel: 'landschaftspflegerischer_begleitplan',
+    tafelParagraf: '§ 31',
+    bezugsart: 'flaeche_hektar',
+    // § 26 benennt die zweite Phase abweichend
+    namen: { ...LPH_NAMEN_LANDSCHAFT, 2: 'Ermitteln und Bewerten der Planungsgrundlagen' },
+    phasen: { 1: 0.03, 2: 0.37, 3: 0.50, 4: 0.10 },
+  },
+
+  pflege_entwicklungsplan: {
+    bezeichnung: 'Pflege- und Entwicklungsplan',
+    leistungsbildParagraf: '§ 27',
+    tafel: 'pflege_entwicklungsplan',
+    tafelParagraf: '§ 32',
+    bezugsart: 'flaeche_hektar',
+    // § 27 benennt die erste Phase abweichend
+    namen: { ...LPH_NAMEN_LANDSCHAFT, 1: 'Zusammenstellen der Ausgangsbedingungen' },
+    phasen: { 1: 0.03, 2: 0.37, 3: 0.50, 4: 0.10 },
+  },
 };
 
 /** Honorarzonen mit ihren Bezeichnungen aus den Honorartafeln. */
@@ -147,6 +248,32 @@ export const HONORARZONEN = {
 };
 
 export const ZONE_ROEMISCH = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
+
+/**
+ * Die Honorarzonen EINES Leistungsbilds — mit Nummer, roemischer Ziffer und der
+ * amtlichen Bezeichnung aus seiner eigenen Honorartafel.
+ *
+ * Notwendig, weil die Skala nicht ueberall gleich ist. Fuenfzonige
+ * Leistungsbilder reichen von "sehr geringen" bis "sehr hohen" Anforderungen;
+ * die dreizonigen — Technische Ausruestung (§ 56) und die gesamte
+ * Flaechenplanung (§§ 20, 21, 28 bis 32) — beginnen bei "geringen" und enden
+ * bei "hohen". Wer dort die Fuenferskala anbietet, laesst nicht nur zwei Zonen
+ * waehlen, die es nicht gibt, sondern benennt auch die drei vorhandenen falsch:
+ * Zone II hiesse dann "gering" statt "durchschnittlich".
+ *
+ * @param {string} schluessel  Leistungsbild
+ * @returns {Array<{nr:number, roemisch:string, text:string}>}
+ */
+export function honorarzonenFuer(schluessel) {
+  const lb = LEISTUNGSBILDER[schluessel];
+  const tafel = lb ? TAFELN[lb.tafel] : null;
+  const anzahl = tafel?.zonen ?? 5;
+  return Array.from({ length: anzahl }, (_, i) => ({
+    nr: i + 1,
+    roemisch: ZONE_ROEMISCH[i + 1],
+    text: tafel?.zonenNamen?.[i] || HONORARZONEN[i + 1],
+  }));
+}
 
 /**
  * Honorarsaetze. Unter HOAI 2013 sind Mindest- und Hoechstsatz verbindlich

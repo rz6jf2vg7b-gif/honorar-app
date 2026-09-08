@@ -22,9 +22,10 @@ import { einstellungenLesen, einstellungenSchreiben } from '../db.js';
 import {
   honorarermittlung, ANRECHNUNG, MASSNAHME_TEXT, IST_UMBAU, IST_INSTANDSETZUNG,
   UMBAUZUSCHLAG_OHNE_VEREINBARUNG, OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX,
+  EINZELLEISTUNG_TEXT, OBJEKTUEBERWACHUNG_EINZELN_MOEGLICH,
 } from '../hoai/rechnen.js';
 import {
-  LEISTUNGSBILDER, HONORARZONEN, ZONE_ROEMISCH, HONORARSAETZE,
+  LEISTUNGSBILDER, ZONE_ROEMISCH, HONORARSAETZE, honorarzonenFuer,
 } from '../hoai/leistungsbilder.js';
 import { GRUNDLEISTUNGEN } from '../hoai/grundleistungen.js';
 import { prozent, runde2 } from '../hoai/geld.js';
@@ -48,6 +49,20 @@ const VORGABE = () => ({
     { nr: '300', bezeichnung: 'Bauwerk – Baukonstruktionen', betrag: 1000000, anrechnung: ANRECHNUNG.VOLL },
     { nr: '400', bezeichnung: 'Bauwerk – Technische Anlagen', betrag: 250000, anrechnung: ANRECHNUNG.TECHNIK_33_2 },
   ],
+  // Flaechenplanung (§ 6 Abs. 1 Nr. 1): dort tritt die Flaeche des Plangebiets
+  // an die Stelle der anrechenbaren Kosten.
+  flaecheHektar: 5,
+  flaecheBemerkung: '',
+  // § 56 Abs. 4 — Anlagengruppen der Technischen Ausruestung in verschiedenen Zonen
+  anlagengruppenAn: false,
+  anlagengruppen: [
+    { zone: 2, bezeichnung: 'Anlagengruppe 1 – Abwasser, Wasser, Gas', kosten: 150000 },
+    { zone: 3, bezeichnung: 'Anlagengruppe 4 – Starkstromanlagen', kosten: 100000 },
+  ],
+  // § 9 — Vorplanung, Entwurfsplanung oder Objektueberwachung als Einzelleistung
+  einzelleistung: '',
+  // § 10 Abs. 2 — wiederholte Grundleistungen ohne Aenderung der Kosten
+  wiederholteGrundleistungen: [],
   honorarzoneBegruendung: '',
   massnahme: '',
   wiederholungen: 0,
@@ -119,7 +134,17 @@ export async function rechnerZeigen(wurzel) {
       // Die Begründung galt dem alten Leistungsbild — ein Regelbeispiel aus
       // Anlage 10 hat für Freianlagen nichts zu sagen.
       z.honorarzoneBegruendung = '';
+      // Die Einzelleistung Objektüberwachung gibt es nicht in jedem
+      // Leistungsbild (§ 9 Abs. 3) — sie darf nicht stehen bleiben.
+      if (z.einzelleistung === 'objektueberwachung'
+          && !OBJEKTUEBERWACHUNG_EINZELN_MOEGLICH.includes(w)) z.einzelleistung = '';
+      // Eine wiederholte Grundleistung nennt eine Leistungsphase, die es im
+      // neuen Leistungsbild nicht geben muss.
+      z.wiederholteGrundleistungen = [];
       zeichneZone();
+      zeichneEinzelleistung();   // § 9 Abs. 3 gilt nicht überall
+      zeichneWiederholungen();
+      zeichneBemessung();        // Hektar statt Kostengruppen, § 56 Abs. 4
       zeichneZuschlaege();       // Obergrenze des Umbauzuschlags hängt daran
       neuRechnen();
     },
@@ -132,11 +157,16 @@ export async function rechnerZeigen(wurzel) {
   const zoneBox = el('div');
   const zeichneZone = () => {
     leeren(zoneBox);
+    // Die Zonen kommen aus der Honorartafel des Leistungsbilds: Technische
+    // Ausrüstung und Flächenplanung haben drei, nicht fünf. Steht die alte
+    // Wahl über der neuen Höchstzone, wird sie zurückgeholt — sonst rechnete
+    // die App mit einer Zone, die es in dieser Tafel nicht gibt.
+    const zonen = honorarzonenFuer(z.leistungsbild);
+    if (z.honorarzone > zonen.length) z.honorarzone = zonen.length;
     zoneBox.append(
       feld({
         label: 'Honorarzone', art: 'auswahl', wert: z.honorarzone,
-        optionen: [1, 2, 3, 4, 5].map((n) =>
-          ({ wert: n, text: `${ZONE_ROEMISCH[n]} — ${HONORARZONEN[n]}` })),
+        optionen: zonen.map((zn) => ({ wert: zn.nr, text: `${zn.roemisch} — ${zn.text}` })),
         hinweis: z.honorarzoneBegruendung || null,
         onAenderung: (w) => { z.honorarzone = Number(w); neuRechnen(); },
       }),
@@ -212,11 +242,98 @@ export async function rechnerZeigen(wurzel) {
   };
   zeichneGruppen();
 
-  wurzel.append(
-    el('div', { class: 'abschnitt' }, el('h2', { text: 'Anrechenbare Kosten' })),
-    el('p', { class: 'klein', text: 'Nach DIN 276. Technische Anlagen werden nach § 33 Abs. 2 behandelt: voll anrechenbar bis 25 % der übrigen anrechenbaren Kosten, darüber zur Hälfte.' }),
-    gruppenBox,
-  );
+  // § 56 Abs. 4 — Anlagengruppen in verschiedenen Honorarzonen.
+  // Nur die Technische Ausruestung kennt diesen Fall: Eine Anlage kann aus
+  // Gruppen bestehen, die unterschiedlich schwierig sind. Fuer alle anderen
+  // Leistungsbilder ist je Objekt getrennt zu rechnen (§ 11 Abs. 1), deshalb
+  // erscheint der Block dort gar nicht erst.
+  const anlagenBox = el('div');
+  const zeichneAnlagengruppen = () => {
+    leeren(anlagenBox);
+    if (z.leistungsbild !== 'technische_ausruestung') { z.anlagengruppenAn = false; return; }
+
+    anlagenBox.append(feld({
+      label: '', art: 'schalter', wert: z.anlagengruppenAn,
+      schaltertext: 'Anlagengruppen in verschiedenen Honorarzonen (§ 56 Abs. 4)',
+      hinweis: 'Jede Zone bekommt das Honorar, das sich aus den GESAMTEN anrechenbaren Kosten '
+        + 'ergäbe — davon aber nur den Anteil ihrer Anlagen. Ohne diesen Umweg fiele jede '
+        + 'Teilsumme in einen niedrigeren Tafelbereich mit höherem Prozentsatz, und die '
+        + 'Summe läge über dem Honorar derselben Anlage aus einer Hand.',
+      onEingabe: (w) => { z.anlagengruppenAn = w; zeichneAnlagengruppen(); neuRechnen(); },
+    }));
+    if (!z.anlagengruppenAn) return;
+
+    z.anlagengruppen.forEach((g, i) => {
+      anlagenBox.append(el('div', { class: 'kostengruppe' },
+        feld({
+          label: 'Zone', art: 'auswahl', wert: g.zone,
+          optionen: honorarzonenFuer(z.leistungsbild)
+            .map((zn) => ({ wert: zn.nr, text: `${zn.roemisch} — ${zn.text}` })),
+          onAenderung: (w) => { g.zone = Number(w); neuRechnen(); },
+        }),
+        feld({ label: 'Anlagengruppe', wert: g.bezeichnung, onEingabe: (w) => { g.bezeichnung = w; } }),
+        feld({
+          label: 'Anrechenbare Kosten', art: 'zahl', einheit: '€', wert: zahlZeigen(g.kosten),
+          onEingabe: (w) => { g.kosten = w ?? 0; neuRechnen(); },
+        }),
+        el('button', {
+          class: 'knopf leise schmal', type: 'button', 'aria-label': 'Anlagengruppe entfernen',
+          onclick: () => { z.anlagengruppen.splice(i, 1); zeichneAnlagengruppen(); neuRechnen(); },
+        }, '×'),
+      ));
+    });
+    anlagenBox.append(el('div', { class: 'knopfreihe' },
+      el('button', {
+        class: 'knopf zweit', type: 'button',
+        onclick: () => {
+          z.anlagengruppen.push({ zone: 2, bezeichnung: '', kosten: 0 });
+          zeichneAnlagengruppen();
+        },
+      }, 'Anlagengruppe hinzufügen')));
+  };
+
+  // Die Bemessungsgrundlage haengt am Leistungsbild (§ 6 Abs. 1): Objekt- und
+  // Fachplanung rechnen nach anrechenbaren Kosten, die Bauleitplanung und die
+  // Landschaftsplanung nach der Flaeche des Plangebiets in Hektar. Beides in
+  // einem Block anzubieten waere irrefuehrend — es gilt immer nur eines.
+  const bemessungKopf = el('div', { class: 'abschnitt' }, el('h2', { text: 'Anrechenbare Kosten' }));
+  const bemessungBox = el('div');
+  const zeichneBemessung = () => {
+    leeren(bemessungBox);
+    const lbB = LEISTUNGSBILDER[z.leistungsbild];
+    const nachFlaeche = lbB.bezugsart === 'flaeche_hektar';
+    leeren(bemessungKopf);
+    bemessungKopf.append(el('h2', { text: nachFlaeche ? 'Fläche des Plangebiets' : 'Anrechenbare Kosten' }));
+
+    if (nachFlaeche) {
+      bemessungBox.append(
+        el('p', { class: 'klein', text: `${lbB.leistungsbildParagraf} rechnet nach der Fläche `
+          + 'des Plangebiets in Hektar (§ 6 Abs. 1 Nr. 1 HOAI), nicht nach anrechenbaren Kosten. '
+          + 'Eine Kostenermittlung nach DIN 276 gibt es hier nicht.' }),
+        feld({
+          label: 'Fläche des Plangebiets', art: 'zahl', einheit: 'ha',
+          wert: zahlZeigen(z.flaecheHektar),
+          onEingabe: (w) => { z.flaecheHektar = w ?? 0; neuRechnen(); },
+        }),
+        feld({
+          label: 'Anmerkung zur Fläche', wert: z.flaecheBemerkung,
+          hinweis: 'Erscheint in der Herleitung — etwa wie die Fläche ermittelt wurde.',
+          onEingabe: (w) => { z.flaecheBemerkung = w; },
+        }),
+      );
+      return;
+    }
+
+    bemessungBox.append(
+      el('p', { class: 'klein', text: 'Nach DIN 276. Technische Anlagen werden nach § 33 Abs. 2 behandelt: voll anrechenbar bis 25 % der übrigen anrechenbaren Kosten, darüber zur Hälfte.' }),
+      gruppenBox,
+      anlagenBox,
+    );
+    zeichneAnlagengruppen();
+  };
+
+  wurzel.append(bemessungKopf, bemessungBox);
+  zeichneBemessung();
 
   // ── Leistungsphasen ───────────────────────────────────
   function zeichnePhasen(ergebnis) {
@@ -348,6 +465,90 @@ export async function rechnerZeigen(wurzel) {
       + 'Das Dreieck öffnet die Grundleistungen der Phase für eine Teilleistungsabrechnung.' }),
     grundhonorarZeile,
     phasenBox,
+  );
+
+  // ── § 9: Einzelleistungen ─────────────────────────────
+  // Die Vorschrift wird oft falsch herum verstanden. Sie deckelt nicht, sie
+  // HEBT AN: Wer nur die Entwurfsplanung beauftragt bekommt, muss die
+  // Vorplanung trotzdem leisten — ohne sie gibt es keinen Entwurf. Also darf
+  // die beauftragte Phase um die Prozentsätze der vorgelagerten erhöht werden.
+  const einzelBox = el('div');
+  const zeichneEinzelleistung = () => {
+    leeren(einzelBox);
+    const ouMoeglich = OBJEKTUEBERWACHUNG_EINZELN_MOEGLICH.includes(z.leistungsbild);
+    const optionen = [
+      { wert: '', text: '— keine, das Leistungsbild ist im Zusammenhang beauftragt —' },
+      ...Object.entries(EINZELLEISTUNG_TEXT)
+        .filter(([k]) => k !== 'objektueberwachung' || ouMoeglich)
+        .map(([wert, text]) => ({ wert, text })),
+    ];
+    einzelBox.append(feld({
+      label: 'Einzeln beauftragte Leistung', art: 'auswahl', wert: z.einzelleistung,
+      optionen,
+      hinweis: z.einzelleistung
+        ? 'Die beauftragte Phase wird um die Prozentsätze der vorgelagerten Phasen erhöht, '
+          + 'soweit diese nicht ohnehin beauftragt sind. Die Erhöhung steht in der Herleitung.'
+        : 'Nach § 9 HOAI. Nur wählen, wenn ausschließlich diese Leistung beauftragt ist — '
+          + (ouMoeglich ? '' : `für ${LEISTUNGSBILDER[z.leistungsbild].bezeichnung} kommt die `
+            + 'Objektüberwachung nach § 9 Abs. 3 nicht in Betracht.'),
+      onAenderung: (w) => { z.einzelleistung = w; zeichneEinzelleistung(); neuRechnen(); },
+    }));
+  };
+  zeichneEinzelleistung();
+
+  // ── § 10 Abs. 2: wiederholte Grundleistungen ──────────
+  // Der Bauherr will den Entwurf noch einmal anders, die anrechenbaren Kosten
+  // bleiben gleich. Die Honorartafel trägt dann nichts bei — vergütet wird der
+  // Anteil der wiederholten Grundleistungen an ihrer Phase. Ohne diese
+  // Vorschrift arbeitet man umsonst; sie verlangt Textform.
+  const wiederholungBox = el('div');
+  const zeichneWiederholungen = () => {
+    leeren(wiederholungBox);
+    const lbW = LEISTUNGSBILDER[z.leistungsbild];
+    const phasenNr = Object.keys(lbW.phasen).map(Number);
+
+    z.wiederholteGrundleistungen.forEach((w, i) => {
+      wiederholungBox.append(el('div', { class: 'kostengruppe' },
+        feld({
+          label: 'LPh', art: 'auswahl', wert: w.phase,
+          optionen: phasenNr.map((n) => ({ wert: n, text: `${n} — ${lbW.namen[n] || ''}` })),
+          onAenderung: (v2) => { w.phase = Number(v2); neuRechnen(); },
+        }),
+        feld({
+          label: 'Wiederholte Leistung', wert: w.bezeichnung,
+          onEingabe: (v2) => { w.bezeichnung = v2; },
+        }),
+        feld({
+          label: 'Anteil an der Phase', art: 'zahl', einheit: '%',
+          wert: zahlZeigen(w.anteil * 100),
+          onEingabe: (v2) => { w.anteil = (v2 ?? 0) / 100; neuRechnen(); },
+        }),
+        el('button', {
+          class: 'knopf leise schmal', type: 'button', 'aria-label': 'Zeile entfernen',
+          onclick: () => { z.wiederholteGrundleistungen.splice(i, 1); zeichneWiederholungen(); neuRechnen(); },
+        }, '×'),
+      ));
+    });
+
+    wiederholungBox.append(el('div', { class: 'knopfreihe' },
+      el('button', {
+        class: 'knopf zweit', type: 'button',
+        onclick: () => {
+          z.wiederholteGrundleistungen.push({ phase: phasenNr[0], bezeichnung: '', anteil: 0.1 });
+          zeichneWiederholungen();
+          neuRechnen();
+        },
+      }, 'Wiederholte Grundleistung hinzufügen')));
+  };
+  zeichneWiederholungen();
+
+  wurzel.append(
+    el('div', { class: 'abschnitt' }, el('h2', { text: 'Einzelleistung und Wiederholung' })),
+    el('p', { class: 'klein', text: '§ 9 regelt die Beauftragung einer einzelnen Leistung, '
+      + '§ 10 Abs. 2 die Wiederholung von Grundleistungen ohne Änderung der anrechenbaren Kosten. '
+      + 'Beides verlangt Textform.' }),
+    einzelBox,
+    wiederholungBox,
   );
 
   // ── Zuschläge ─────────────────────────────────────────
@@ -639,6 +840,17 @@ function rechne(z) {
     massnahme: z.massnahme || undefined,
     objektueberwachungZuschlag: z.objektueberwachungZuschlag || undefined,
     wiederholungen: z.wiederholungen || 0,
+    // § 6 Abs. 1 Nr. 1 — nur die Flächenplanung wertet das aus, die anderen
+    // Leistungsbilder rechnen weiter nach anrechenbaren Kosten.
+    flaecheHektar: z.flaecheHektar,
+    flaecheBemerkung: z.flaecheBemerkung || '',
+    // § 56 Abs. 4 — nur wenn ausdrücklich eingeschaltet; sonst gilt das eine
+    // Grundhonorar aus den anrechenbaren Kosten.
+    anlagengruppen: z.anlagengruppenAn
+      ? z.anlagengruppen.filter((g) => g.kosten > 0)
+      : undefined,
+    einzelleistung: z.einzelleistung || undefined,
+    wiederholteGrundleistungen: z.wiederholteGrundleistungen.filter((w) => w.anteil > 0),
     phasen,
     zuschlaege,
     nebenkosten: { art: 'pauschal', prozent: z.nebenkosten },

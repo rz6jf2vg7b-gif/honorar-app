@@ -6,7 +6,7 @@
 // groesseren Geraeten in zwei Spalten.
 
 import { el, feld, leeren, zahlLesen, zahlZeigen, eurZeigen, melden } from '../ui.js';
-import { LEISTUNGSBILDER, HONORARSAETZE, ZONE_ROEMISCH, HONORARZONEN } from '../hoai/leistungsbilder.js';
+import { LEISTUNGSBILDER, HONORARSAETZE, ZONE_ROEMISCH, HONORARZONEN, honorarzonenFuer } from '../hoai/leistungsbilder.js';
 import {
   ANRECHNUNG, MASSNAHME_TEXT, IST_UMBAU, IST_INSTANDSETZUNG,
   UMBAUZUSCHLAG_OHNE_VEREINBARUNG, OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX,
@@ -123,14 +123,13 @@ export function vertragsformular(o) {
   const zoneBox = el('div');
   const zoneFeldNeu = () => {
     leeren(zoneBox);
-    const lb = LEISTUNGSBILDER[leistungsbildF.eingabe.value];
-    const anzahl = lb?.tafel === 'technische_ausruestung' ? 3 : 5;
-    if (v.honorarzone > anzahl) v.honorarzone = anzahl;
+    // Zonen aus der Honorartafel des Leistungsbilds — dreizonig bei Technischer
+    // Ausrüstung und Flächenplanung, und dort auch anders benannt.
+    const zonen = honorarzonenFuer(leistungsbildF.eingabe.value);
+    if (v.honorarzone > zonen.length) v.honorarzone = zonen.length;
     zoneBox.append(feld({
       label: 'Honorarzone', art: 'auswahl', wert: v.honorarzone,
-      optionen: Array.from({ length: anzahl }, (_, i) => ({
-        wert: i + 1, text: `${ZONE_ROEMISCH[i + 1]} — ${HONORARZONEN[i + 1]}`,
-      })),
+      optionen: zonen.map((zn) => ({ wert: zn.nr, text: `${zn.roemisch} — ${zn.text}` })),
       onAenderung: (w) => { v.honorarzone = Number(w); melden_(); },
     }),
     // Der Weg über Objektliste und Bewertungsmerkmale — er liefert Zone UND

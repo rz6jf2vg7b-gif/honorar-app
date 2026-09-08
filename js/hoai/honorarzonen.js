@@ -113,6 +113,121 @@ export const HONORARZONEN_BEWERTUNG = {
     grenzen: null,
   },
 
+  // ── Flächenplanung ────────────────────────────────────
+  // Drei Honorarzonen statt fünf. Zwei Systematiken: Die Bauleitplanung
+  // (§§ 20, 21) bewertet jedes Merkmal dreistufig mit 1, 2 oder 3 Punkten —
+  // gering, durchschnittlich, hoch. Die Landschaftsplanung (§§ 28 bis 32)
+  // arbeitet wie die Objektplanung mit Spannen "bis zu X Punkten".
+
+  flaechennutzungsplan: {
+    punkte: true,
+    fundstelle: '§ 20 Abs. 3 bis 5',
+    objektliste: null,
+    dreistufig: true,
+    merkmale: [
+      { text: 'zentralörtliche Bedeutung und Gemeindestruktur', max: 3 },
+      { text: 'Nutzungsvielfalt und Nutzungsdichte', max: 3 },
+      { text: 'Einwohnerstruktur, Einwohnerentwicklung und Gemeinbedarfsstandorte', max: 3 },
+      { text: 'Verkehr und Infrastruktur', max: 3 },
+      { text: 'Topografie, Geologie und Kulturlandschaft', max: 3 },
+      { text: 'Klima-, Natur- und Umweltschutz', max: 3 },
+    ],
+    grenzen: [9, 14, 18],
+  },
+
+  bebauungsplan: {
+    punkte: true,
+    // § 21 Abs. 4 verweist auf § 20 Abs. 4 und 5 — gleiche Gewichtung, gleiche
+    // Grenzen, nur andere Merkmale.
+    fundstelle: '§ 21 Abs. 3 und 4',
+    objektliste: null,
+    dreistufig: true,
+    merkmale: [
+      { text: 'Nutzungsvielfalt und Nutzungsdichte', max: 3 },
+      { text: 'Baustruktur und Baudichte', max: 3 },
+      { text: 'Gestaltung und Denkmalschutz', max: 3 },
+      { text: 'Verkehr und Infrastruktur', max: 3 },
+      { text: 'Topografie und Landschaft', max: 3 },
+      { text: 'Klima-,Natur- und Umweltschutz', max: 3 },
+    ],
+    grenzen: [9, 14, 18],
+  },
+
+  landschaftsplan: {
+    punkte: true,
+    fundstelle: '§ 28 Abs. 3 bis 5',
+    objektliste: null,
+    merkmale: [
+      { text: 'topographische Verhältnisse', max: 6 },
+      { text: 'Flächennutzung', max: 6 },
+      { text: 'Landschaftsbild', max: 6 },
+      { text: 'Anforderungen an Umweltsicherung und Umweltschutz', max: 9 },
+      { text: 'ökologische Verhältnisse', max: 9 },
+      { text: 'Bevölkerungsdichte', max: 6 },
+    ],
+    grenzen: [16, 30, 42],
+  },
+
+  gruenordnungsplan: {
+    punkte: true,
+    fundstelle: '§ 29 Abs. 3 bis 5',
+    objektliste: null,
+    merkmale: [
+      { text: 'Topographie', max: 6 },
+      { text: 'ökologische Verhältnisse', max: 6 },
+      { text: 'Flächennutzungen und Schutzgebiete', max: 6 },
+      { text: 'Umwelt-, Klima-, Denkmal- und Naturschutz', max: 9 },
+      { text: 'Erholungsvorsorge', max: 6 },
+      { text: 'Anforderung an die Freiraumgestaltung', max: 9 },
+    ],
+    grenzen: [16, 30, 42],
+  },
+
+  landschaftsrahmenplan: {
+    punkte: true,
+    fundstelle: '§ 30 Abs. 3 bis 5',
+    objektliste: null,
+    merkmale: [
+      { text: 'topographische Verhältnisse', max: 6 },
+      { text: 'Raumnutzung und Bevölkerungsdichte', max: 6 },
+      { text: 'Landschaftsbild', max: 6 },
+      { text: 'Anforderungen an Umweltsicherung, Klima- und Naturschutz', max: 9 },
+      { text: 'ökologische Verhältnisse', max: 9 },
+      { text: 'Freiraumsicherung und Erholung', max: 6 },
+    ],
+    grenzen: [16, 30, 42],
+  },
+
+  landschaftspflegerischer_begleitplan: {
+    punkte: true,
+    fundstelle: '§ 31 Abs. 3 bis 5',
+    objektliste: null,
+    merkmale: [
+      { text: 'ökologisch bedeutsame Strukturen und Schutzgebiete', max: 6 },
+      { text: 'Landschaftsbild und Erholungsnutzung', max: 6 },
+      { text: 'Nutzungsansprüche', max: 6 },
+      { text: 'Anforderungen an die Gestaltung von Landschaft und Freiraum', max: 6 },
+      { text: 'Empfindlichkeit gegenüber Umweltbelastungen und Beeinträchtigungen von Natur und Landschaft', max: 9 },
+      { text: 'potenzielle Beeinträchtigungsintensität der Maßnahme', max: 9 },
+    ],
+    grenzen: [16, 30, 42],
+  },
+
+  pflege_entwicklungsplan: {
+    punkte: true,
+    fundstelle: '§ 32 Abs. 3 bis 5',
+    objektliste: null,
+    // Einzige Bewertung mit drei verschiedenen Gewichten: 4, 6 und 9 Punkte.
+    merkmale: [
+      { text: 'fachliche Vorgaben', max: 4 },
+      { text: 'Differenziertheit des floristischen Inventars oder der Pflanzengesellschaften', max: 9 },
+      { text: 'Differenziertheit des faunistischen Inventars', max: 9 },
+      { text: 'Beeinträchtigungen oder Schädigungen von Naturhaushalt und Landschaftsbild', max: 6 },
+      { text: 'Aufwand für die Festlegung von Zielaussagen sowie für Pflege- und Entwicklungsmaßnahmen', max: 6 },
+    ],
+    grenzen: [13, 24, 34],
+  },
+
   technische_ausruestung: {
     punkte: false,
     fundstelle: '§ 56 Abs. 2 und 3',
