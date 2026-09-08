@@ -28,6 +28,57 @@ const tabelle = (titel, spalten, zeilen, fuss = null, anmerkungen = null) =>
 // ————————————————————————————————————————————————————————————————
 
 /** Anrechnungsarten einer Kostengruppe. */
+/**
+ * Art der Massnahme nach § 2. Sie entscheidet, welcher Zuschlag ueberhaupt in
+ * Betracht kommt:
+ *   Umbau und Modernisierung  -> Umbauzuschlag (§ 6 Abs. 2, § 36 und die
+ *                                entsprechenden Vorschriften der Leistungsbilder)
+ *   Instandsetzung/-haltung   -> Erhoehung der Objektueberwachung (§ 12 Abs. 2)
+ *   Neubau und die uebrigen   -> keiner von beiden
+ *
+ * Beides sind KANN-Vereinbarungen in Textform. Der Unterschied: Beim
+ * Umbauzuschlag gilt ohne Vereinbarung ein Zuschlag von 20 Prozent als
+ * vereinbart (§ 6 Abs. 2 Satz 4) — bei der Objektueberwachung gibt es keine
+ * solche Auffangregel.
+ */
+export const MASSNAHME = {
+  NEUBAU: 'neubau',
+  WIEDERAUFBAU: 'wiederaufbau',
+  ERWEITERUNG: 'erweiterung',
+  UMBAU: 'umbau',
+  MODERNISIERUNG: 'modernisierung',
+  INSTANDSETZUNG: 'instandsetzung',
+  INSTANDHALTUNG: 'instandhaltung',
+};
+
+export const MASSNAHME_TEXT = {
+  neubau: 'Neubau / Neuanlage (§ 2 Abs. 2)',
+  wiederaufbau: 'Wiederaufbau (§ 2 Abs. 3)',
+  erweiterung: 'Erweiterungsbau (§ 2 Abs. 4)',
+  umbau: 'Umbau (§ 2 Abs. 5)',
+  modernisierung: 'Modernisierung (§ 2 Abs. 6)',
+  instandsetzung: 'Instandsetzung (§ 2 Abs. 8)',
+  instandhaltung: 'Instandhaltung (§ 2 Abs. 9)',
+};
+
+/** Bei welcher Massnahme kommt ein Umbau- oder Modernisierungszuschlag in Betracht? */
+export const IST_UMBAU = (m) => m === MASSNAHME.UMBAU || m === MASSNAHME.MODERNISIERUNG;
+
+/** Bei welcher Massnahme greift § 12 Abs. 2? */
+export const IST_INSTANDSETZUNG = (m) =>
+  m === MASSNAHME.INSTANDSETZUNG || m === MASSNAHME.INSTANDHALTUNG;
+
+/**
+ * Zuschlag, der ohne Vereinbarung in Textform als vereinbart gilt.
+ * § 6 Abs. 2 Satz 4: "Sofern keine Vereinbarung in Textform getroffen wurde,
+ * gilt ein Zuschlag von 20 Prozent ab einem durchschnittlichen
+ * Schwierigkeitsgrad als vereinbart."
+ */
+export const UMBAUZUSCHLAG_OHNE_VEREINBARUNG = 0.20;
+
+/** Obergrenze der Erhoehung nach § 12 Abs. 2. */
+export const OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX = 0.50;
+
 export const ANRECHNUNG = {
   VOLL: 'voll',                 // vollstaendig anrechenbar
   ANTEILIG: 'anteilig',         // mit einem vereinbarten Prozentsatz
@@ -287,8 +338,15 @@ export function grundhonorar({ leistungsbild, kosten, zone, satzAnteil, fassung 
  *                           der Verordnung. erbracht als Anteil des Vereinbarten
  *                           (1 = vollstaendig), Vorgabe 1.
  * @param {number} p.fassung
+ * @param {object} [p.phasenzuschlaege]  {8: 0.5} erhoeht die Bewertung der
+ *                           Leistungsphase 8 um 50 Prozent ihrer Bewertung
+ *                           (§ 12 Abs. 2). Erhoeht wird die BEWERTUNG, nicht der
+ *                           vereinbarte Anteil — nur so bleibt eine
+ *                           Teilbeauftragung dieser Phase richtig gerechnet.
  */
-export function leistungsphasen({ leistungsbild, grundhonorar100, phasen, fassung = 2021 }) {
+export function leistungsphasen({
+  leistungsbild, grundhonorar100, phasen, fassung = 2021, phasenzuschlaege = {},
+}) {
   const lb = LEISTUNGSBILDER[leistungsbild];
   if (!lb) throw new Error(`Unbekanntes Leistungsbild: ${leistungsbild}`);
 
@@ -297,7 +355,12 @@ export function leistungsphasen({ leistungsbild, grundhonorar100, phasen, fassun
   let summeErbrachtAnteil = 0, summeErbracht = 0;
 
   for (const nr of Object.keys(lb.phasen).map(Number).sort((a, b) => a - b)) {
-    const voll = lb.phasen[nr];
+    const grundbewertung = lb.phasen[nr];
+    const zuschlag = phasenzuschlaege[nr] || 0;
+    // Auf vier Nachkommastellen: Die Bewertungen der HOAI sind ganze Prozent,
+    // ein Zuschlag von 50 Prozent darauf ergibt halbe. Weiter zu runden hiesse
+    // Cent zu verlieren, weniger zu runden schleppt Gleitkommareste mit.
+    const voll = Math.round(grundbewertung * (1 + zuschlag) * 10000) / 10000;
     const eingabe = (phasen || []).find((p) => p.nr === nr);
     const vereinbart = eingabe ? (eingabe.vereinbart ?? voll) : 0;
     const erbrachtAnteil = eingabe ? (eingabe.erbracht ?? 1) : 0;
@@ -326,6 +389,8 @@ export function leistungsphasen({ leistungsbild, grundhonorar100, phasen, fassun
       nr,
       bezeichnung: lb.namen[nr],
       bewertung: voll,
+      grundbewertung,
+      zuschlag,
       vereinbart,
       betragVereinbart,
       erbrachtAnteil,
@@ -392,11 +457,38 @@ export function honorarermittlung(v) {
     satzAnteil: v.honorarsatz,
     fassung: v.fassung,
   });
+  // § 12 Abs. 2: Bei Instandsetzungen und Instandhaltungen kann in Textform
+  // vereinbart werden, dass der Prozentsatz fuer die Objektueberwachung oder
+  // Bauoberleitung um bis zu 50 Prozent der Bewertung dieser Phase erhoeht
+  // wird. Das ist Leistungsphase 8 — in allen Leistungsbildern heisst sie so.
+  const phasenzuschlaege = {};
+  const ouZuschlag = v.objektueberwachungZuschlag || 0;
+  if (ouZuschlag) {
+    if (!IST_INSTANDSETZUNG(v.massnahme)) {
+      throw new Error(
+        'Die Erhöhung der Objektüberwachung nach § 12 Abs. 2 setzt eine Instandsetzung '
+        + 'oder Instandhaltung voraus. Die Maßnahme ist als '
+        + `"${MASSNAHME_TEXT[v.massnahme] || v.massnahme || 'nicht angegeben'}" erfasst.`,
+      );
+    }
+    if (ouZuschlag > OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX + 1e-9) {
+      throw new Error(
+        `Erhöhung der Objektüberwachung ${prozent(ouZuschlag)} überschreitet die Grenze von `
+        + `${prozent(OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX)} (§ 12 Abs. 2 HOAI).`,
+      );
+    }
+    if (!lb.phasen[8]) {
+      throw new Error(`${lb.bezeichnung} kennt keine Leistungsphase 8 — § 12 Abs. 2 greift nicht.`);
+    }
+    phasenzuschlaege[8] = ouZuschlag;
+  }
+
   const lph = leistungsphasen({
     leistungsbild: v.leistungsbild,
     grundhonorar100: gh.betrag,
     phasen: v.phasen,
     fassung: v.fassung,
+    phasenzuschlaege,
   });
 
   // Reihenfolge der Herleitung folgt dem Rechenweg: erst die anrechenbaren Kosten,
@@ -409,7 +501,19 @@ export function honorarermittlung(v) {
       { bez: v.honorarzoneBegruendung, wert: `Honorarzone ${ZONE_ROEMISCH[v.honorarzone]}` },
     ]));
   }
-  herleitung.push(...gh.herleitung, ...lph.herleitung);
+  herleitung.push(...gh.herleitung);
+  if (ouZuschlag) {
+    herleitung.push(werte(
+      `Erhöhung der ${lb.namen[8]} nach § 12 Abs. 2 HOAI`,
+      [
+        { bez: 'Art der Maßnahme', wert: MASSNAHME_TEXT[v.massnahme] },
+        { bez: 'Bewertung nach der Verordnung', wert: prozent(lb.phasen[8]) },
+        { bez: 'vereinbarte Erhöhung', wert: prozent(ouZuschlag) },
+        { bez: 'Bewertung danach', wert: prozent(Math.round(lb.phasen[8] * (1 + ouZuschlag) * 10000) / 10000) },
+      ],
+    ));
+  }
+  herleitung.push(...lph.herleitung);
 
   // Zuschlaege auf die erbrachten Grundleistungen
   const zuschlaege = [];
@@ -419,7 +523,7 @@ export function honorarermittlung(v) {
     if (lb.umbauzuschlagBis && z.prozent > lb.umbauzuschlagBis + 1e-9 && z.art === 'umbau') {
       throw new Error(
         `Umbauzuschlag ${prozent(z.prozent)} überschreitet den Rahmen von `
-        + `${prozent(lb.umbauzuschlagBis)} (§ 36 Abs. 1 HOAI).`,
+        + `${prozent(lb.umbauzuschlagBis)} (${lb.umbauzuschlagFundstelle} HOAI).`,
       );
     }
     const betrag = runde2(lph.erbracht * z.prozent);

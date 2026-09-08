@@ -7,7 +7,10 @@
 
 import { el, feld, leeren, zahlLesen, zahlZeigen, eurZeigen, melden } from '../ui.js';
 import { LEISTUNGSBILDER, HONORARSAETZE, ZONE_ROEMISCH, HONORARZONEN } from '../hoai/leistungsbilder.js';
-import { ANRECHNUNG } from '../hoai/rechnen.js';
+import {
+  ANRECHNUNG, MASSNAHME_TEXT, IST_UMBAU, IST_INSTANDSETZUNG,
+  UMBAUZUSCHLAG_OHNE_VEREINBARUNG, OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX,
+} from '../hoai/rechnen.js';
 import { prozent } from '../hoai/geld.js';
 import { honorarzoneErmitteln } from './honorarzone.js';
 
@@ -239,12 +242,87 @@ export function vertragsformular(o) {
   phasenNeu();
 
   // ── Zuschläge und Nebenkosten ────────────────────────
-  const umbauF = feld({
-    label: 'Umbau-/Modernisierungszuschlag', art: 'zahl', einheit: '%',
-    wert: v.umbauzuschlag ? zahlZeigen(v.umbauzuschlag * 100) : '',
-    hinweis: 'Bei Gebäuden bis 33 % (§ 36 HOAI). Leer = kein Zuschlag.',
-    onEingabe: (w) => { v.umbauzuschlag = (w ?? 0) / 100; melden_(); },
+  // ── Art der Maßnahme und die daran hängenden Zuschläge ──
+  // Erst die Art nach § 2, dann was daraus folgt: Umbau und Modernisierung
+  // tragen einen Umbauzuschlag, Instandsetzung und Instandhaltung dagegen eine
+  // Erhöhung der Objektüberwachung. Beides nebeneinander anzubieten hieße,
+  // etwas anzubieten, das die Verordnung nicht kennt.
+  const zuschlagBox = el('div');
+
+  const zeichneZuschlaege = () => {
+    leeren(zuschlagBox);
+    const lb = LEISTUNGSBILDER[leistungsbildF.eingabe.value];
+    const massnahme = v.massnahme || '';
+
+    if (IST_UMBAU(massnahme)) {
+      const grenze = lb?.umbauzuschlagBis;
+      const fund = lb?.umbauzuschlagFundstelle || '§ 36';
+
+      const vereinbartF = feld({
+        label: '', art: 'schalter', wert: v.umbauzuschlagVereinbart !== false,
+        schaltertext: 'Zuschlag in Textform vereinbart',
+        hinweis: 'Ohne Vereinbarung gelten 20 % ab durchschnittlichem Schwierigkeitsgrad '
+          + 'als vereinbart (§ 6 Abs. 2 Satz 4) — das Honorar steht dir also auch dann zu.',
+        onEingabe: (w) => {
+          v.umbauzuschlagVereinbart = w;
+          if (!w) v.umbauzuschlag = UMBAUZUSCHLAG_OHNE_VEREINBARUNG;
+          zeichneZuschlaege();
+          melden_();
+        },
+      });
+
+      const hoehe = feld({
+        label: 'Umbau-/Modernisierungszuschlag', art: 'zahl', einheit: '%',
+        wert: v.umbauzuschlag ? zahlZeigen(v.umbauzuschlag * 100) : '',
+        hinweis: grenze
+          ? `${fund} — bis ${prozent(grenze)}.`
+          : `Für ${lb?.bezeichnung} sieht die HOAI keinen Umbauzuschlag vor.`,
+        onEingabe: (w) => { v.umbauzuschlag = (w ?? 0) / 100; melden_(); },
+      });
+      if (!grenze) hoehe.eingabe.disabled = true;
+      if (v.umbauzuschlagVereinbart === false) hoehe.eingabe.disabled = true;
+
+      zuschlagBox.append(vereinbartF, hoehe);
+      return;
+    }
+
+    if (IST_INSTANDSETZUNG(massnahme)) {
+      const lph8 = lb?.phasen?.[8];
+      const f = feld({
+        label: `Erhöhung der ${lb?.namen?.[8] || 'Objektüberwachung'}`, art: 'zahl', einheit: '%',
+        wert: v.objektueberwachungZuschlag ? zahlZeigen(v.objektueberwachungZuschlag * 100) : '',
+        hinweis: lph8
+          ? `§ 12 Abs. 2 — bis ${prozent(OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX)} der Bewertung dieser Phase, `
+            + `in Textform zu vereinbaren. ${prozent(lph8)} würden damit bis zu `
+            + `${prozent(Math.round(lph8 * 1.5 * 10000) / 10000)}.`
+          : `${lb?.bezeichnung} kennt keine Leistungsphase 8 — § 12 Abs. 2 greift nicht.`,
+        onEingabe: (w) => { v.objektueberwachungZuschlag = (w ?? 0) / 100; melden_(); },
+      });
+      if (!lph8) f.eingabe.disabled = true;
+      zuschlagBox.append(f);
+      return;
+    }
+
+    zuschlagBox.append(el('p', { class: 'klein', text: massnahme
+      ? 'Für diese Art der Maßnahme sieht die HOAI weder einen Umbauzuschlag noch eine Erhöhung der Objektüberwachung vor.'
+      : 'Art der Maßnahme wählen — davon hängt ab, welcher Zuschlag in Betracht kommt.' }));
+  };
+
+  const massnahmeF = feld({
+    label: 'Art der Maßnahme', art: 'auswahl', wert: v.massnahme || '',
+    optionen: [{ wert: '', text: '— nicht angegeben —' },
+      ...Object.entries(MASSNAHME_TEXT).map(([w, text]) => ({ wert: w, text }))],
+    hinweis: 'Nach § 2 HOAI. Bestimmt, welcher Zuschlag zulässig ist.',
+    onAenderung: (w) => {
+      v.massnahme = w;
+      // Was zur alten Art gehörte, gilt für die neue nicht.
+      if (!IST_UMBAU(w)) v.umbauzuschlag = 0;
+      if (!IST_INSTANDSETZUNG(w)) v.objektueberwachungZuschlag = 0;
+      zeichneZuschlaege();
+      melden_();
+    },
   });
+  zeichneZuschlaege();
 
   const nkArtF = feld({
     label: 'Nebenkosten', art: 'auswahl', wert: v.nebenkosten?.art || 'pauschal',
@@ -313,7 +391,7 @@ export function vertragsformular(o) {
     phasenBox,
 
     el('h2', { text: 'Zuschläge und Nebenkosten' }),
-    umbauF, nkArtF, nkBox,
+    massnahmeF, zuschlagBox, nkArtF, nkBox,
   );
 
   function lesen() {
@@ -334,8 +412,19 @@ export function vertragsformular(o) {
       honorarzoneBegruendung: zoneBegruendungF.eingabe.value.trim() || undefined,
       honorarsatz: v.honorarsatz,
       phasen: v.phasen.filter((p) => p.vereinbart > 0).map((p) => ({ nr: p.nr, vereinbart: p.vereinbart })),
+      massnahme: v.massnahme || undefined,
+      objektueberwachungZuschlag: v.objektueberwachungZuschlag || undefined,
       zuschlaege: v.umbauzuschlag > 0
-        ? [{ art: 'umbau', bezeichnung: 'Umbauzuschlag', prozent: v.umbauzuschlag, fundstelle: '§ 36 HOAI' }]
+        ? [{
+          art: 'umbau',
+          bezeichnung: v.umbauzuschlagVereinbart === false
+            ? 'Umbauzuschlag (§ 6 Abs. 2 Satz 4 — ohne Vereinbarung als vereinbart geltend)'
+            : 'Umbauzuschlag',
+          prozent: v.umbauzuschlag,
+          fundstelle: LEISTUNGSBILDER[v.leistungsbild]?.umbauzuschlagFundstelle
+            ? `${LEISTUNGSBILDER[v.leistungsbild].umbauzuschlagFundstelle} HOAI`
+            : '§ 36 HOAI',
+        }]
         : [],
       nebenkosten: v.nebenkosten,
     };
@@ -370,6 +459,9 @@ function strukturieren(vertrag, vorgaben = {}) {
       ? JSON.parse(JSON.stringify(v.phasen))
       : Object.keys(lb.phasen).map(Number).sort((a, b) => a - b).map((nr) => ({ nr, vereinbart: lb.phasen[nr] })),
     umbauzuschlag: v.zuschlaege?.find((z) => z.art === 'umbau')?.prozent ?? 0,
+    umbauzuschlagVereinbart: v.umbauzuschlagVereinbart !== false,
+    massnahme: v.massnahme || '',
+    objektueberwachungZuschlag: v.objektueberwachungZuschlag || 0,
     nebenkosten: v.nebenkosten !== undefined
       ? v.nebenkosten
       : { art: 'pauschal', prozent: vorgaben.nebenkostenProzent ?? 0.05 },

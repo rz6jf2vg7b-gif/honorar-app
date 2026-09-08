@@ -186,6 +186,10 @@ export function ermittlungAusVertrag(vertrag, leistungsstand = null) {
     honorarzone: vertrag.honorarzone,
     honorarzoneBegruendung: vertrag.honorarzoneBegruendung,
     honorarsatz: vertrag.honorarsatz,
+    // Art der Maßnahme und die Erhöhung nach § 12 Abs. 2 gehören zum
+    // Vertragsstand — ohne sie käme der Zuschlag im Beleg nie an.
+    massnahme: vertrag.massnahme,
+    objektueberwachungZuschlag: vertrag.objektueberwachungZuschlag,
     phasen,
     zuschlaege: vertrag.zuschlaege || [],
     weiterePositionen: vertrag.weiterePositionen || [],

@@ -19,7 +19,10 @@ import {
   el, leeren, melden, feld, zahlLesen, zahlZeigen, eurZeigen,
 } from '../ui.js';
 import { einstellungenLesen, einstellungenSchreiben } from '../db.js';
-import { honorarermittlung, ANRECHNUNG } from '../hoai/rechnen.js';
+import {
+  honorarermittlung, ANRECHNUNG, MASSNAHME_TEXT, IST_UMBAU, IST_INSTANDSETZUNG,
+  UMBAUZUSCHLAG_OHNE_VEREINBARUNG, OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX,
+} from '../hoai/rechnen.js';
 import {
   LEISTUNGSBILDER, HONORARZONEN, ZONE_ROEMISCH, HONORARSAETZE,
 } from '../hoai/leistungsbilder.js';
@@ -46,6 +49,9 @@ const VORGABE = () => ({
     { nr: '400', bezeichnung: 'Bauwerk – Technische Anlagen', betrag: 250000, anrechnung: ANRECHNUNG.TECHNIK_33_2 },
   ],
   honorarzoneBegruendung: '',
+  massnahme: '',
+  umbauzuschlagVereinbart: true,
+  objektueberwachungZuschlag: 0,
   umbauzuschlag: 0,
   nebenkosten: 0.05,
   ustSatz: 0.19,
@@ -228,17 +234,31 @@ export async function rechnerZeigen(wurzel) {
 
     const kopf = el('tr', {},
       el('th', { text: '' }), el('th', { text: 'LPh' }), el('th', { text: 'Leistungsphase' }),
-      el('th', { class: 'r', text: 'HOAI' }), el('th', { class: 'r', text: 'HOAI €' }),
+      el('th', { class: 'r', text: 'Bewertung' }), el('th', { class: 'r', text: 'Bewertung €' }),
       el('th', { class: 'r', text: 'gewählt' }), el('th', { class: 'r', text: 'gewählt €' }),
     );
     const koerper = el('tbody');
 
     let summeHoai = 0;
     let summeGewaehlt = 0;
+    // Die Euro-Summen werden aus den EINZELBETRÄGEN aufaddiert, nicht aus der
+    // Anteilssumme neu berechnet. Der Rechenkern rundet je Phase auf Cent und
+    // summiert danach — rechnete die Fußzeile anders, stünde in der Tabelle
+    // eine andere Summe als im Ergebnis. Zwei Cent, aber genau die Sorte
+    // Widerspruch, die einen Beleg unglaubwürdig macht.
+    let summeHoaiEuro = 0;
+    let summeGewaehltEuro = 0;
 
-    for (const [nrText, hoaiAnteil] of Object.entries(lb.phasen)) {
+    for (const [nrText, grundbewertung] of Object.entries(lb.phasen)) {
       const nr = Number(nrText);
       const p = z.phasen[nr];
+      // Die Bewertung kann erhöht sein (§ 12 Abs. 2). Sie aus dem Rechenergebnis
+      // zu nehmen ist Pflicht, nicht Kür: Stünde hier weiter die Bewertung der
+      // Verordnung, zeigte die Tabelle etwas anderes an, als gerechnet wird —
+      // und das fiele erst auf, wenn die Summen nicht mehr aufgehen.
+      const gerechnet = ergebnis?.phasen?.find((x) => x.nr === nr);
+      const hoaiAnteil = gerechnet ? gerechnet.bewertung : grundbewertung;
+      const erhoeht = gerechnet?.zuschlag > 0;
       summeHoai += hoaiAnteil;
       if (p.an) summeGewaehlt += (p.anteil ?? hoaiAnteil);
 
@@ -267,10 +287,19 @@ export async function rechnerZeigen(wurzel) {
         : el('span', { class: 'klein', text: '' });
 
       const gewaehltAnteil = p.an ? (p.anteil ?? hoaiAnteil) : 0;
+      if (gh !== null) {
+        summeHoaiEuro = runde2(summeHoaiEuro + runde2(gh * hoaiAnteil));
+        if (p.an) summeGewaehltEuro = runde2(summeGewaehltEuro + runde2(gh * gewaehltAnteil));
+      }
       koerper.append(el('tr', { class: p.an ? '' : 'aus' },
         el('td', {}, zelleAufklappen),
         el('td', { class: 'mono' }, schalter, el('span', { text: ` ${nr}` })),
-        el('td', { text: lb.namen[nr] || '' }),
+        el('td', {},
+          el('span', { text: lb.namen[nr] || '' }),
+          erhoeht
+            ? el('span', { class: 'marke ruht', style: 'margin-left:8px',
+              text: `+${prozent(gerechnet.zuschlag)} § 12 Abs. 2` })
+            : null),
         el('td', { class: 'r mono grau', text: prozent(hoaiAnteil) }),
         el('td', { class: 'r mono grau', text: eur(hoaiAnteil) }),
         el('td', { class: 'r' }, el('div', { class: 'mitEinheit eng' }, anteilFeld, el('span', { class: 'einheit', text: '%' }))),
@@ -294,9 +323,9 @@ export async function rechnerZeigen(wurzel) {
           el('tfoot', {}, el('tr', {},
             el('td', { text: '' }), el('td', { text: '' }), el('td', { text: 'Summe' }),
             el('td', { class: 'r mono grau', text: prozent(summeHoai) }),
-            el('td', { class: 'r mono grau', text: eur(summeHoai) }),
+            el('td', { class: 'r mono grau', text: gh === null ? '—' : eurZeigen(summeHoaiEuro) }),
             el('td', { class: 'r mono', text: prozent(summeGewaehlt) }),
-            el('td', { class: 'r mono', text: eur(summeGewaehlt) }),
+            el('td', { class: 'r mono', text: gh === null ? '—' : eurZeigen(summeGewaehltEuro) }),
           )),
         )),
       el('div', { class: 'knopfreihe' },
@@ -310,7 +339,7 @@ export async function rechnerZeigen(wurzel) {
 
   wurzel.append(
     el('div', { class: 'abschnitt' }, el('h2', { text: 'Leistungsphasen' })),
-    el('p', { class: 'klein', text: 'Die Spalte HOAI zeigt die Bewertung der Verordnung, die Spalte gewählt den vereinbarten Anteil — beides zusätzlich in Euro. '
+    el('p', { class: 'klein', text: 'Die Spalte Bewertung zeigt, womit die Leistungsphase angesetzt wird — in der Regel die Bewertung der Verordnung, bei einer Erhöhung nach § 12 Abs. 2 die erhöhte. Die Spalte gewählt den vereinbarten Anteil, beides zusätzlich in Euro. '
       + 'Die Beträge sind reines Grundhonorar; Umbauzuschlag, Nebenkosten und Umsatzsteuer kommen darauf, weil sie sich auf die Summe beziehen, nicht auf die einzelne Phase. '
       + 'Das Dreieck öffnet die Grundleistungen der Phase für eine Teilleistungsabrechnung.' }),
     grundhonorarZeile,
@@ -326,49 +355,94 @@ export async function rechnerZeigen(wurzel) {
   const zeichneZuschlaege = () => {
     leeren(zuschlagBox);
     const lbA = LEISTUNGSBILDER[z.leistungsbild];
-    const erlaubt = !!lbA.umbauzuschlagBis;
-    if (!erlaubt) z.umbauzuschlag = 0;
 
-    const fUmbau = feld({
-      label: 'Umbauzuschlag', art: 'zahl', einheit: '%',
-      wert: zahlZeigen(z.umbauzuschlag * 100),
-      hinweis: erlaubt
-        ? `${lbA.umbauzuschlagFundstelle} — bis ${prozent(lbA.umbauzuschlagBis)}`
-        : `Für ${lbA.bezeichnung} sieht die HOAI keinen Umbauzuschlag vor.`,
-      onEingabe: (w) => {
-        z.umbauzuschlag = (w ?? 0) / 100;
-        pruefeGrenze();
+    // Art der Maßnahme zuerst — sie entscheidet, welcher Zuschlag überhaupt in
+    // Betracht kommt (§ 2 in Verbindung mit § 6 Abs. 2 und § 12 Abs. 2).
+    const fMassnahme = feld({
+      label: 'Art der Maßnahme', art: 'auswahl', wert: z.massnahme,
+      optionen: [{ wert: '', text: '— nicht angegeben —' },
+        ...Object.entries(MASSNAHME_TEXT).map(([w, text]) => ({ wert: w, text }))],
+      hinweis: 'Nach § 2 HOAI. Bestimmt, welcher Zuschlag zulässig ist.',
+      onAenderung: (w) => {
+        z.massnahme = w;
+        if (!IST_UMBAU(w)) z.umbauzuschlag = 0;
+        if (!IST_INSTANDSETZUNG(w)) z.objektueberwachungZuschlag = 0;
+        zeichneZuschlaege();
         neuRechnen();
       },
     });
-    if (!erlaubt) fUmbau.eingabe.disabled = true;
 
-    const pruefeGrenze = () => {
-      if (!erlaubt) return;
-      const h = fUmbau.querySelector('.hinweis');
-      if (z.umbauzuschlag > lbA.umbauzuschlagBis + 0.0001) {
-        h.textContent = `Über der Obergrenze von ${prozent(lbA.umbauzuschlagBis)} nach `
-          + `${lbA.umbauzuschlagFundstelle}. So vereinbart wäre der übersteigende Teil angreifbar.`;
-        h.className = 'hinweis fehler';
-      } else {
-        h.textContent = `${lbA.umbauzuschlagFundstelle} — bis ${prozent(lbA.umbauzuschlagBis)}`;
-        h.className = 'hinweis';
-      }
-    };
-    pruefeGrenze();
+    const besonderer = el('div');
+    if (IST_UMBAU(z.massnahme)) {
+      const erlaubt = !!lbA.umbauzuschlagBis;
+      if (!erlaubt) z.umbauzuschlag = 0;
 
-    zuschlagBox.append(el('div', { class: 'feldreihe-3' },
-      fUmbau,
-      feld({
-        label: 'Nebenkosten', art: 'zahl', einheit: '%', wert: zahlZeigen(z.nebenkosten * 100),
-        hinweis: '§ 14 — pauschal',
-        onEingabe: (w) => { z.nebenkosten = (w ?? 0) / 100; neuRechnen(); },
-      }),
-      feld({
-        label: 'Umsatzsteuer', art: 'zahl', einheit: '%', wert: zahlZeigen(z.ustSatz * 100),
-        onEingabe: (w) => { z.ustSatz = (w ?? 0) / 100; neuRechnen(); },
-      }),
-    ));
+      const fVereinbart = feld({
+        label: '', art: 'schalter', wert: z.umbauzuschlagVereinbart,
+        schaltertext: 'Zuschlag in Textform vereinbart',
+        hinweis: 'Ohne Vereinbarung gelten 20 % ab durchschnittlichem Schwierigkeitsgrad '
+          + 'als vereinbart (§ 6 Abs. 2 Satz 4).',
+        onEingabe: (w) => {
+          z.umbauzuschlagVereinbart = w;
+          if (!w && erlaubt) z.umbauzuschlag = UMBAUZUSCHLAG_OHNE_VEREINBARUNG;
+          zeichneZuschlaege();
+          neuRechnen();
+        },
+      });
+
+      const fUmbau = feld({
+        label: 'Umbauzuschlag', art: 'zahl', einheit: '%',
+        wert: zahlZeigen(z.umbauzuschlag * 100),
+        hinweis: erlaubt
+          ? `${lbA.umbauzuschlagFundstelle} — bis ${prozent(lbA.umbauzuschlagBis)}`
+          : `Für ${lbA.bezeichnung} sieht die HOAI keinen Umbauzuschlag vor.`,
+        onEingabe: (w) => {
+          z.umbauzuschlag = (w ?? 0) / 100;
+          const h = fUmbau.querySelector('.hinweis');
+          if (erlaubt && z.umbauzuschlag > lbA.umbauzuschlagBis + 0.0001) {
+            h.textContent = `Über der Obergrenze von ${prozent(lbA.umbauzuschlagBis)} nach `
+              + `${lbA.umbauzuschlagFundstelle}. So vereinbart wäre der übersteigende Teil angreifbar.`;
+            h.className = 'hinweis fehler';
+          } else if (erlaubt) {
+            h.textContent = `${lbA.umbauzuschlagFundstelle} — bis ${prozent(lbA.umbauzuschlagBis)}`;
+            h.className = 'hinweis';
+          }
+          neuRechnen();
+        },
+      });
+      if (!erlaubt || !z.umbauzuschlagVereinbart) fUmbau.eingabe.disabled = true;
+      besonderer.append(fVereinbart, fUmbau);
+    } else if (IST_INSTANDSETZUNG(z.massnahme)) {
+      const lph8 = lbA.phasen?.[8];
+      const f = feld({
+        label: `Erhöhung der ${lbA.namen?.[8] || 'Objektüberwachung'}`, art: 'zahl', einheit: '%',
+        wert: zahlZeigen(z.objektueberwachungZuschlag * 100),
+        hinweis: lph8
+          ? `§ 12 Abs. 2 — bis ${prozent(OBJEKTUEBERWACHUNG_ZUSCHLAG_MAX)} der Bewertung dieser Phase. `
+            + `${prozent(lph8)} würden damit bis zu ${prozent(Math.round(lph8 * 1.5 * 10000) / 10000)}.`
+          : `${lbA.bezeichnung} kennt keine Leistungsphase 8 — § 12 Abs. 2 greift nicht.`,
+        onEingabe: (w) => { z.objektueberwachungZuschlag = (w ?? 0) / 100; neuRechnen(); },
+      });
+      if (!lph8) f.eingabe.disabled = true;
+      besonderer.append(f);
+    } else {
+      besonderer.append(el('p', { class: 'klein', text: z.massnahme
+        ? 'Für diese Art der Maßnahme sieht die HOAI weder einen Umbauzuschlag noch eine Erhöhung der Objektüberwachung vor.'
+        : 'Art der Maßnahme wählen — davon hängt ab, welcher Zuschlag in Betracht kommt.' }));
+    }
+
+    zuschlagBox.append(fMassnahme, besonderer,
+      el('div', { class: 'feldreihe' },
+        feld({
+          label: 'Nebenkosten', art: 'zahl', einheit: '%', wert: zahlZeigen(z.nebenkosten * 100),
+          hinweis: '§ 14 — pauschal',
+          onEingabe: (w) => { z.nebenkosten = (w ?? 0) / 100; neuRechnen(); },
+        }),
+        feld({
+          label: 'Umsatzsteuer', art: 'zahl', einheit: '%', wert: zahlZeigen(z.ustSatz * 100),
+          onEingabe: (w) => { z.ustSatz = (w ?? 0) / 100; neuRechnen(); },
+        }),
+      ));
   };
 
   wurzel.append(
@@ -518,7 +592,14 @@ function rechne(z) {
   if (!phasen.length) throw new Error('Keine Leistungsphase gewählt.');
 
   const zuschlaege = z.umbauzuschlag > 0
-    ? [{ art: 'umbau', bezeichnung: 'Umbauzuschlag', prozent: z.umbauzuschlag, fundstelle: '§ 36 HOAI' }]
+    ? [{
+      art: 'umbau',
+      bezeichnung: z.umbauzuschlagVereinbart
+        ? 'Umbauzuschlag'
+        : 'Umbauzuschlag (§ 6 Abs. 2 Satz 4 — ohne Vereinbarung als vereinbart geltend)',
+      prozent: z.umbauzuschlag,
+      fundstelle: `${lb.umbauzuschlagFundstelle || '§ 36'} HOAI`,
+    }]
     : [];
 
   return honorarermittlung({
@@ -534,6 +615,8 @@ function rechne(z) {
     honorarzone: z.honorarzone,
     honorarzoneBegruendung: z.honorarzoneBegruendung || '',
     honorarsatz: z.honorarsatz,
+    massnahme: z.massnahme || undefined,
+    objektueberwachungZuschlag: z.objektueberwachungZuschlag || undefined,
     phasen,
     zuschlaege,
     nebenkosten: { art: 'pauschal', prozent: z.nebenkosten },

@@ -5,7 +5,10 @@
 //   Auftritt — Wortmarke, Disziplinzeile, Akzentfarbe. Mehr ist nicht einstellbar:
 //              Struktur und Satz des Belegs sind fest, damit keine Rechnung
 //              entsteht, der eine Pflichtangabe fehlt.
-//   Vorgaben — was der Assistent voreinstellt, damit man es nicht jedes Mal tippt.
+//   Startwerte — womit ein neuer Beleg beginnt. Ausdruecklich KEINE Festlegung:
+//              jeder Wert ist im Beleg aenderbar. Der frueher hier stehende
+//              Titel "Vorgaben fuer neue Belege" las sich wie eine zentrale
+//              Vorschrift und hat genau diesen Eindruck erweckt.
 
 import { el, leeren, melden, feld, farbfeld, bildLaden, zahlZeigen, dateiSpeichern, dateiLaden, bestaetigen } from '../ui.js';
 import { einstellungenLesen, einstellungenSchreiben, sicherungErstellen, sicherungEinspielen } from '../db.js';
@@ -133,7 +136,10 @@ export async function einstellungenZeigen(wurzel) {
     el('p', { class: 'klein', text: 'Ein Logo ersetzt die Wortmarke im Belegkopf. Es wird in den Beleg eingebettet und liegt nur auf diesem Gerät — nichts wird nachgeladen. PNG, SVG, JPEG oder WebP, höchstens 400 KB.' }),
     logoBlock(),
 
-    el('h2', { text: 'Vorgaben für neue Belege' }),
+    el('h2', { text: 'Startwerte für neue Belege' }),
+    el('p', { class: 'klein', text: 'Womit ein neuer Beleg beginnt — nichts davon ist festgelegt. '
+      + 'Jeder Wert lässt sich beim Erstellen ändern, ohne dass sich hier etwas ändert. '
+      + 'Der Sinn ist nur, das Übliche nicht jedes Mal neu einzutragen.' }),
     el('div', { class: 'feldreihe' },
       (f['vorgaben.fassung'] = feld({
         label: 'HOAI-Fassung', art: 'auswahl', wert: e.vorgaben.fassung,

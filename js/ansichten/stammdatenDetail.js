@@ -8,7 +8,7 @@
 // Bearbeitet wird von hier aus; die Formulare liegen weiter in stammdaten.js,
 // damit es nur eine Stelle gibt, an der ein Datensatz geschrieben wird.
 
-import { el, leeren, eurZeigen, isoNachDe, melden, bestaetigen, zurueck, feld, suchauswahl } from '../ui.js';
+import { el, leeren, eurZeigen, isoNachDe, heuteIso, melden, bestaetigen, zurueck, feld, suchauswahl } from '../ui.js';
 import { SPEICHER, lesen, alle, loeschen, schreiben, personName, kontaktSuchtext } from '../db.js';
 import { projektStand } from './stammdaten.js';
 import { BELEGART_TEXT, IST_RECHNUNG, STATUS, vertraegeZuProjekt } from '../vorgang.js';
@@ -193,7 +193,15 @@ export async function projektAnsehen(wurzel, projektId) {
   } else {
     wurzel.append(el('ul', { class: 'liste' }, ...vertraege.slice().reverse().map((v) => {
       const lb = LEISTUNGSBILDER[v.leistungsbild];
-      const beauftragt = (v.phasen || []).reduce((s, p) => s + (p.vereinbart || 0), 0);
+      const anteil = (v.phasen || []).reduce((s, p) => s + (p.vereinbart || 0), 0);
+      // Version 1 ist der Auftrag selbst — sie ist beauftragt, sonst gäbe es sie
+      // nicht. Erst ab Version 2 ist die Beauftragung eine offene Frage: Ein
+      // Nachtrag kann erstellt und übersandt sein, ohne dass der Auftraggeber
+      // ihn schon erteilt hat. Das Dashboard zeigt beides getrennt an — bisher
+      // gab es nur keine Stelle, an der man es setzt.
+      const istNachtrag = v.version > 1;
+      const beauftragt = !istNachtrag || v.beauftragt === true;
+
       return el('li', {}, el('div', { class: 'eintrag' },
         el('div', { class: 'haupt' },
           el('div', { class: 'titel', text: `Version ${v.version} — ${v.grund}` }),
@@ -201,10 +209,27 @@ export async function projektAnsehen(wurzel, projektId) {
             `HOAI ${v.fassung}`,
             lb?.bezeichnung,
             v.honorarzone ? `Zone ${ZONE_ROEMISCH[v.honorarzone]}` : null,
-            `beauftragt ${prozent(beauftragt, 2)}`,
+            `${prozent(anteil, 2)} der Leistung`,
             v.gueltigAb ? `ab ${isoNachDe(v.gueltigAb)}` : null,
+            v.beauftragtAm ? `beauftragt am ${isoNachDe(v.beauftragtAm)}` : null,
           ].filter(Boolean).join(' · ') }),
         ),
+        istNachtrag
+          ? feld({
+            label: '', art: 'schalter', wert: beauftragt,
+            schaltertext: beauftragt ? 'beauftragt' : 'zur Beauftragung',
+            onEingabe: async (w) => {
+              v.beauftragt = w;
+              // Das Datum ist der eigentliche Wert: Ab wann gilt der geänderte
+              // Vertragsstand? Ohne es bliebe im Streit offen, seit wann.
+              v.beauftragtAm = w ? (v.beauftragtAm || heuteIso()) : '';
+              await schreiben(SPEICHER.VERTRAEGE, v);
+              melden(w ? 'Als beauftragt vermerkt.' : 'Beauftragung zurückgenommen.');
+              leeren(wurzel);
+              await projektAnsehen(wurzel, projektId);
+            },
+          })
+          : el('span', { class: 'marke aktiv', text: 'Auftrag' }),
       ));
     })));
   }
