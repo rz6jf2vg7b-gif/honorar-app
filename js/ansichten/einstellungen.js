@@ -19,6 +19,8 @@ import {
   steuernummerFormatieren, steuernummerPruefen, ustIdFormatieren, ustIdPruefen,
 } from '../format.js';
 import { prozent } from '../hoai/geld.js';
+import * as ms from '../sync/microsoft.js';
+import { dateiPfadAnzeige } from '../sync/onedrive.js';
 
 export async function einstellungenZeigen(wurzel) {
   const e = await einstellungenLesen();
@@ -214,6 +216,9 @@ export async function einstellungenZeigen(wurzel) {
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#rechtliches'; } }, 'Rechtliches'),
     ),
 
+    el('h2', { text: 'Abgleich über OneDrive' }),
+    abgleichBlock(),
+
     el('h2', { text: 'Sicherung' }),
     el('p', { class: 'klein', text: 'Die Daten liegen auf diesem Gerät. Eine Sicherung enthält Einstellungen, Stammdaten, Verträge und alle Belege.' }),
     el('div', { class: 'knopfreihe' },
@@ -221,6 +226,108 @@ export async function einstellungenZeigen(wurzel) {
       el('button', { class: 'knopf zweit', onclick: einspielen }, 'Sicherung einspielen'),
     ),
   );
+
+  /**
+   * Anmeldung und Abgleich mit OneDrive.
+   *
+   * Der Abgleich ist ausgeschaltet, solange ihn niemand einschaltet. Das ist
+   * keine Vorsicht um ihrer selbst willen: Mit dem Einschalten verlaesst der
+   * Datenstand dieses Geraet — mit Bankverbindung, Steuernummer,
+   * Kundenanschriften und allen Betraegen. Wer das nicht will, verliert nichts;
+   * die App arbeitet ohne Netz vollstaendig.
+   */
+  function abgleichBlock() {
+    const box = el('div');
+
+    const zeichnen = () => {
+      leeren(box);
+      const an = e.abgleich?.an;
+      const angemeldet = ms.angemeldet();
+
+      box.append(el('p', { class: 'klein', text:
+        'Legt den Datenstand als eine Datei in deinem OneDrive ab und holt ihn auf '
+        + 'jedem Gerät wieder. Sie enthält Bankverbindung, Steuernummer, '
+        + 'Kundenanschriften und alle Beträge — sie gehört in kein geteiltes Verzeichnis.' }));
+      box.append(el('p', { class: 'klein', text: `Ablageort: ${dateiPfadAnzeige()}` }));
+
+      box.append(feld({
+        label: '', art: 'schalter', wert: !!an, schaltertext: 'Abgleich über OneDrive nutzen',
+        onAenderung: async (w) => {
+          e.abgleich = { ...e.abgleich, an: w };
+          await einstellungenSchreiben(e, { stempeln: false });
+          zeichnen();
+        },
+      }));
+
+      if (!an) return;
+
+      if (ms.anmeldungNoetig()) {
+        box.append(el('p', { class: 'hinweis fehler', text:
+          'Die Anmeldung bei Microsoft ist abgelaufen. Sie hält aus technischen Gründen '
+          + 'höchstens 24 Stunden; die App erneuert sie sonst still im Hintergrund.' }));
+      }
+
+      box.append(el('p', { class: 'klein', text: angemeldet
+        ? `Angemeldet als ${ms.konto() || '—'}`
+        : 'Noch nicht bei Microsoft angemeldet.' }));
+
+      if (e.abgleich?.letzter) {
+        box.append(el('p', { class: 'klein', text:
+          `Zuletzt abgeglichen: ${new Date(e.abgleich.letzter).toLocaleString('de-DE')}` }));
+      }
+
+      const meldung = el('div');
+      box.append(el('div', { class: 'knopfreihe' },
+        angemeldet ? el('button', {
+          class: 'knopf akzent',
+          onclick: async (ev) => {
+            const knopf = ev.currentTarget;
+            knopf.disabled = true;
+            leeren(meldung);
+            try {
+              const { abgleichen } = await import('../sync/abgleich.js');
+              const r = await abgleichen();
+              e.abgleich = { ...e.abgleich, letzter: r.letzter };
+              melden(r.erster
+                ? `Erster Abgleich — ${r.belege} Belege abgelegt.`
+                : `Abgeglichen: ${r.hereingekommen} neu, ${r.aktualisiert} aktualisiert.`);
+              if (r.konflikte.length) {
+                meldung.append(el('div', { class: 'karte' },
+                  el('h3', { text: 'Der Abgleich hat nichts entschieden' }),
+                  el('p', { class: 'klein', text:
+                    'Diese Fälle braucht ein Mensch. Der Stand dieses Geräts blieb unverändert.' }),
+                  el('ul', { class: 'liste' }, ...r.konflikte.map((k) => el('li', {},
+                    el('div', { class: 'eintrag' }, el('div', { class: 'haupt' },
+                      el('div', { class: 'titel', text: k.nummer || k.id }),
+                      el('div', { class: 'neben', text: k.text }))))),
+                  ),
+                ));
+              }
+              zeichnen();
+            } catch (fehler) {
+              meldung.append(el('p', { class: 'hinweis fehler', text: fehler.message }));
+              knopf.disabled = false;
+            }
+          },
+        }, 'Jetzt abgleichen') : el('button', {
+          class: 'knopf akzent', onclick: () => ms.anmelden(),
+        }, 'Bei Microsoft anmelden'),
+        angemeldet ? el('button', {
+          class: 'knopf leise',
+          onclick: async () => {
+            if (!await bestaetigen('Von Microsoft abmelden?',
+              'Die Daten auf diesem Gerät bleiben unverändert. Der Abgleich ruht, bis du '
+              + 'dich wieder anmeldest.')) return;
+            ms.abmelden();
+            zeichnen();
+          },
+        }, 'Abmelden') : null,
+      ), meldung);
+    };
+
+    zeichnen();
+    return box;
+  }
 
   /**
    * Zeigt das hinterlegte Logo und erlaubt Austausch und Entfernen.
@@ -270,7 +377,17 @@ export async function einstellungenZeigen(wurzel) {
   }
 
   async function speichern() {
+    // Alles uebernehmen, was hier gar nicht bearbeitet wird, und nur die drei
+    // Gruppen neu aus den Feldern aufbauen.
+    //
+    // Bis zum 09.09.2026 stand hier `{ buero:{}, cd:{}, vorgaben:{} }` — damit
+    // loeschte jedes Speichern der Einstellungen stillschweigend die eigene
+    // Bewertung der Teilleistungen, die im Rechner eingetragen wird. Sie steht
+    // in derselben Einstellungsdatei, kommt aber in keinem Feld dieser Ansicht
+    // vor. Mit dem OneDrive-Abgleich waere derselbe Fehler auch dem Zustand des
+    // Abgleichs passiert.
     const neu = {
+      ...e,
       buero: {}, cd: {}, vorgaben: {},
     };
     // Logo und Logoname haengen an keinem Eingabefeld, sondern am Block darueber.

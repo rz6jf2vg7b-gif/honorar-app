@@ -79,26 +79,64 @@ const alsPromise = (anf) => new Promise((res, rej) => {
   anf.onerror = () => rej(anf.error);
 });
 
-export async function lesen(speicher, id) {
+/**
+ * Speicher mit Datensaetzen — im Unterschied zu den Einstellungen, die ein
+ * einzelner Eintrag unter festem Schluessel sind. Nur hier gelten Zeitstempel
+ * und Grabsteine.
+ */
+const DATENSPEICHER = [SPEICHER.PROJEKTE, SPEICHER.ADRESSEN, SPEICHER.VERTRAEGE, SPEICHER.BELEGE];
+
+/** Ein Grabstein ist kein Datensatz, sondern die Nachricht "das ist geloescht". */
+export const istGrabstein = (x) => !!x?.geloescht;
+
+export async function lesen(speicher, id, { mitGeloeschten = false } = {}) {
   const db = await oeffnen();
-  return alsPromise(db.transaction(speicher).objectStore(speicher).get(id));
+  const wert = await alsPromise(db.transaction(speicher).objectStore(speicher).get(id));
+  return !mitGeloeschten && istGrabstein(wert) ? undefined : wert;
 }
 
-export async function alle(speicher) {
+export async function alle(speicher, { mitGeloeschten = false } = {}) {
   const db = await oeffnen();
-  return alsPromise(db.transaction(speicher).objectStore(speicher).getAll());
+  const liste = await alsPromise(db.transaction(speicher).objectStore(speicher).getAll());
+  return mitGeloeschten ? liste : liste.filter((x) => !istGrabstein(x));
 }
 
+/**
+ * Schreibt einen Datensatz und stempelt ihn.
+ *
+ * Der Zeitstempel entsteht hier und nicht bei den Aufrufern: Er ist die
+ * Grundlage des Abgleichs zwischen den Geraeten, und ein Schreibweg, der ihn
+ * vergisst, laesst seine Aenderung beim naechsten Abgleich lautlos verlieren.
+ * Der Abgleich selbst schreibt deshalb ueber schreibeViele(), das den
+ * mitgebrachten Stempel unangetastet laesst.
+ */
 export async function schreiben(speicher, wert, schluessel) {
-  return tx(speicher, 'readwrite', (s) => (schluessel !== undefined ? s.put(wert, schluessel) : s.put(wert)));
+  const satz = DATENSPEICHER.includes(speicher) && wert && typeof wert === 'object'
+    ? { ...wert, geaendert: new Date().toISOString() }
+    : wert;
+  return tx(speicher, 'readwrite', (s) => (schluessel !== undefined ? s.put(satz, schluessel) : s.put(satz)));
 }
 
 export async function schreibeViele(speicher, werte) {
   return tx(speicher, 'readwrite', (s) => { for (const w of werte) s.put(w); });
 }
 
+/**
+ * Loeschen heisst bei Datensaetzen: einen Grabstein hinterlassen.
+ *
+ * Wer wirklich loescht, bekommt den Eintrag beim naechsten Abgleich vom anderen
+ * Geraet zurueck — dort weiss niemand, dass er weg soll. Der Grabstein traegt
+ * einen Zeitstempel und gewinnt damit nach derselben Regel wie jede andere
+ * Aenderung. Er bleibt fuer die Oberflaeche unsichtbar, weil alle() und lesen()
+ * ihn herausfiltern.
+ */
 export async function loeschen(speicher, id) {
-  return tx(speicher, 'readwrite', (s) => s.delete(id));
+  if (!DATENSPEICHER.includes(speicher)) {
+    return tx(speicher, 'readwrite', (s) => s.delete(id));
+  }
+  return tx(speicher, 'readwrite', (s) => s.put({
+    id, geloescht: true, geaendert: new Date().toISOString(),
+  }));
 }
 
 export async function leeren(speicher) {
@@ -270,6 +308,13 @@ export function telefonZeigen(buero) {
 export async function einstellungenLesen() {
   const roh = (await lesen(SPEICHER.EINSTELLUNGEN, 'aktuell')) || {};
   return {
+    // Wann dieses Geraet die Einstellungen zuletzt geaendert hat. Beim Abgleich
+    // gewinnt der juengere Stand als Ganzes: Einstellungen feldweise zu
+    // verschmelzen ergaebe Mischzustaende, die niemand eingestellt hat.
+    geaendert: roh.geaendert || null,
+    // Zustand des OneDrive-Abgleichs. Steht bewusst hier und nicht im
+    // Browserspeicher: Er gehoert zu den Daten, nicht zum Geraet.
+    abgleich: { an: false, letzter: null, ...(roh.abgleich || {}) },
     buero: bueroAngleichen({ ...VORGABE_EINSTELLUNGEN.buero, ...(roh.buero || {}) }),
     cd: { ...VORGABE_EINSTELLUNGEN.cd, ...(roh.cd || {}) },
     vorgaben: { ...VORGABE_EINSTELLUNGEN.vorgaben, ...(roh.vorgaben || {}) },
@@ -281,8 +326,9 @@ export async function einstellungenLesen() {
   };
 }
 
-export async function einstellungenSchreiben(e) {
-  return schreiben(SPEICHER.EINSTELLUNGEN, e, 'aktuell');
+export async function einstellungenSchreiben(e, { stempeln = true } = {}) {
+  const satz = stempeln ? { ...e, geaendert: new Date().toISOString() } : e;
+  return schreiben(SPEICHER.EINSTELLUNGEN, satz, 'aktuell');
 }
 
 // ————————————————————————————————————————————————————————————————

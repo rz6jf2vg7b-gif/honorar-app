@@ -139,8 +139,12 @@ export function feld(o) {
 
   const box = el('div', { class: 'feld' },
     o.label ? el('label', { for: id, text: o.label }) : null,
+    // Die Beschriftung eines Schalters ist ein <label> und kein <span>: Sonst
+    // ist auf dem Telefon nur das Kaestchen selbst zu treffen, und das ist
+    // kleiner als eine Fingerkuppe.
     o.art === 'schalter'
-      ? el('div', { class: 'mitEinheit' }, eingabe, el('span', { text: o.schaltertext || '' }))
+      ? el('div', { class: 'mitEinheit' }, eingabe,
+          el('label', { for: id, text: o.schaltertext || '' }))
       : huelle,
     (o.hinweis || o.pruefen)
       ? (hinweisBox = el('div', { class: `hinweis ${o.hinweisArt || ''}`, text: o.hinweis || '' }))

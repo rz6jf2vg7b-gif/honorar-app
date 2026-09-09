@@ -132,7 +132,54 @@ async function leiten() {
 }
 
 window.addEventListener('hashchange', leiten);
-leiten();
+
+/**
+ * Start: erst zeichnen, dann abgleichen.
+ *
+ * Umgekehrt saehe man beim Oeffnen eine leere Seite, solange das Netz braucht —
+ * und ohne Netz gar keine. Die App gehoert dem Geraet; der Abgleich ist eine
+ * Zutat, die auch ausbleiben darf.
+ */
+async function starten() {
+  // Kommen wir gerade von der Microsoft-Anmeldung zurueck? Das muss vor allem
+  // anderen geschehen, weil der Code in der Adresszeile steht und dort nicht
+  // stehen bleiben darf.
+  const zurueckVonAnmeldung = /[?&](code|error)=/.test(location.search);
+  if (zurueckVonAnmeldung) {
+    const ms = await import('./sync/microsoft.js');
+    const r = await ms.rueckkehrPruefen();
+    if (r && !r.ok && r.meldung) melden(r.meldung, 'fehler');
+  }
+
+  leiten();
+
+  try {
+    const e = await einstellungenLesen();
+    if (!e.abgleich?.an || !navigator.onLine) return;
+
+    const ms = await import('./sync/microsoft.js');
+    if (!ms.angemeldet() || ms.anmeldungNoetig()) return;
+    // Naht Entras 24-Stunden-Grenze, wird still erneuert — die Seite laedt
+    // dabei neu, der Abgleich kommt danach.
+    if (ms.erneuerungFaellig() && await ms.stillErneuern()) return;
+
+    const { abgleichen } = await import('./sync/abgleich.js');
+    const r = await abgleichen();
+    if (r.hereingekommen || r.aktualisiert) {
+      melden(`Abgeglichen: ${r.hereingekommen} neu, ${r.aktualisiert} aktualisiert.`);
+      leiten();
+    }
+    if (r.konflikte.length) {
+      melden(`${r.konflikte.length} Fall/Fälle konnte der Abgleich nicht entscheiden — `
+        + 'siehe Einstellungen.', 'fehler');
+    }
+  } catch (fehler) {
+    // Ein misslungener Abgleich darf den Start nie aufhalten.
+    console.warn('Abgleich beim Start:', fehler);
+  }
+}
+
+starten();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

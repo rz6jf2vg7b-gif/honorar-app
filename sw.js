@@ -30,6 +30,7 @@ const KERN = [
   './js/hoai/rechnen.js', './js/hoai/abrechnung.js',
   './js/beleg/rechnung_html.js', './js/beleg/cd.js', './js/beleg/pflichtangaben.js',
   './js/beleg/angebot.js', './js/beleg/xrechnung.js',
+  './js/sync/microsoft.js', './js/sync/onedrive.js', './js/sync/abgleich.js',
   './js/ansichten/dashboard.js', './js/ansichten/belegansicht.js',
   './js/ansichten/assistent.js', './js/ansichten/vertragsformular.js',
   './js/ansichten/stammdaten.js', './js/ansichten/stammdatenDetail.js',
