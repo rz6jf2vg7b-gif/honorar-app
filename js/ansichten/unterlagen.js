@@ -89,6 +89,9 @@ export async function unterlagenZeigen(wurzel, projektId) {
         + 'der Kammervorlage, mit deren Ziffern.' }),
       el('p', { class: 'fliess', text: 'Das Abnahmeprotokoll ist der Sache nach ein Formular und steht '
         + 'deshalb vollständig hier. Auch dafür gilt: Entwurf, kein Rechtsrat.' }),
+      el('p', { class: 'fliess', text: 'Die Kammervorlagen liegen als ausfüllbare Formulare unter '
+        + '03_RESOURCES/Fachgrundlagen/Architektenkammer-RLP/Formulare. „Vertragsdaten (JSON)" legt '
+        + 'die Angaben dieses Projekts so ab, dass tools/vertrag_ausfuellen.py sie dort einsetzt.' }),
     ),
   );
 
@@ -142,6 +145,15 @@ export async function unterlagenZeigen(wurzel, projektId) {
           class: 'knopf leise', type: 'button',
           onclick: () => dateiSpeichern(name, text, 'text/plain;charset=utf-8'),
         }, 'Als Datei ablegen'),
+        el('button', {
+          class: 'knopf leise', type: 'button',
+          onclick: () => {
+            const daten2 = vertragsdaten({ projekt, auftraggeber, vertrag, einst });
+            dateiSpeichern(`${projekt.nummer}_Vertragsdaten.json`.replace(/[^\wÄÖÜäöüß.-]/g, '_'),
+              JSON.stringify(daten2, null, 1), 'application/json');
+            melden('Vertragsdaten abgelegt — für tools/vertrag_ausfuellen.py.');
+          },
+        }, 'Vertragsdaten (JSON)'),
       ),
     );
   };
@@ -565,3 +577,146 @@ ${unterschriften}
 ${strich}
 Entwurf. Kein Rechtsrat. Bei streitigen Abnahmen anwaltlich prüfen lassen.`;
 }
+
+// ————————————————————————————————————————————————————————————————
+// Vertragsdaten fuer das maschinelle Ausfuellen
+// ————————————————————————————————————————————————————————————————
+
+/**
+ * Alle Angaben eines Projekts in einer festen Form — die Schnittstelle zu
+ * tools/vertrag_ausfuellen.py, das damit die Formularfelder der Kammervorlage
+ * fuellt.
+ *
+ * WARUM DIESER UMWEG UND NICHT DIREKT AUS DER APP
+ * Die Vorlage der Kammer ist urheberrechtlich geschuetzt; sie auszufuellen ist
+ * erlaubt und ihr Zweck, sie in die App aufzunehmen waere es nicht. Die App
+ * gibt deshalb nur die Angaben aus, das Ausfuellen geschieht am Rechner an der
+ * Vorlage, die dort ohnehin liegt. Nebenbei bleibt die App frei von einer
+ * PDF-Bibliothek, die sie sonst bei jedem Start mitschleppen muesste.
+ *
+ * Die Werte sind fertig geschrieben, nicht roh: Wer eine Zahl in einen Vertrag
+ * setzt, will "154.807,52 €" und nicht "154807.52". Das Werkzeug formatiert
+ * nichts nach — was hier steht, steht so im Vertrag.
+ */
+export function vertragsdaten({ projekt, auftraggeber, vertrag, einst }) {
+  const b = einst.buero;
+  const anschriftB = anschriftZeilen(b);
+  const ag = auftraggeber;
+  const lb = vertrag ? LEISTUNGSBILDER[vertrag.leistungsbild] : null;
+
+  let e = null;
+  if (vertrag) { try { e = ermittlungAusVertrag(vertrag, null); } catch { /* unvollständig */ } }
+
+  const heute = new Date();
+  const eur = (z) => (Number.isFinite(z)
+    ? new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(z) + ' €'
+    : '');
+
+  const phasen = (e?.phasen || []).filter((p) => p.vereinbart > 0);
+
+  return {
+    art: 'honorarapp-vertragsdaten',
+    fassung: 1,
+    erzeugt: heute.toISOString(),
+
+    projekt: {
+      nummer: projekt.nummer || '',
+      name: projekt.name || '',
+      kuerzel: projekt.kuerzel || '',
+      vorhaben: projekt.vorhaben || projekt.name || '',
+      ort: projekt.ort || '',
+      strasse: projekt.strasse || '',
+      flurstueck: projekt.flurstueck || '',
+      anschrift: [projekt.strasse, [projekt.plz, projekt.ort].filter(Boolean).join(' ')]
+        .filter(Boolean).join(', '),
+    },
+
+    bauherr: {
+      name: ag?.name || '',
+      zusatz: ag?.zusatz || '',
+      vertretenDurch: ag ? personName(ag) : '',
+      strasse: ag?.strasse || '',
+      plzOrt: ag ? `${ag.plz || ''} ${ag.ort || ''}`.trim() : '',
+      anschrift: ag ? [ag.strasse, `${ag.plz || ''} ${ag.ort || ''}`.trim()].filter(Boolean).join(', ') : '',
+      telefon: ag?.telefon || '',
+      mail: ag?.mail || '',
+    },
+
+    architekt: {
+      name: b.name || '',
+      inhaber: b.inhaber || '',
+      funktion: b.funktion || '',
+      strasse: anschriftB.strasse,
+      plzOrt: anschriftB.plzOrt,
+      anschrift: [anschriftB.strasse, anschriftB.plzOrt].filter(Boolean).join(', '),
+      telefon: telefonZeigen(b),
+      mail: b.mail || '',
+      kammer: b.kammer || '',
+      eintragungsnummer: b.eintragungsnummer || '',
+      haftpflichtVersicherer: b.haftpflichtVersicherer || '',
+      haftpflichtAnschrift: b.haftpflichtAnschrift || '',
+      haftpflichtGeltungsbereich: b.haftpflichtGeltungsbereich || '',
+    },
+
+    honorar: vertrag ? {
+      fassung: `HOAI ${vertrag.fassung}`,
+      leistungsbild: lb?.bezeichnung || vertrag.leistungsbild || '',
+      leistungsbildParagraf: lb?.leistungsbildParagraf || '',
+      honorarzone: ZONE_ROEMISCH[vertrag.honorarzone] || '',
+      honorarzoneBegruendung: vertrag.honorarzoneBegruendung || '',
+      honorarsatz: satzText(vertrag.honorarsatz),
+      massnahme: MASSNAHME_TEXT[vertrag.massnahme] || '',
+      kostenermittlungGrundlage: vertrag.kostenermittlung?.grundlage || '',
+      kostenermittlungDatum: isoNachDe(vertrag.kostenermittlung?.datum || ''),
+      anrechenbareKosten: eur(e?.anrechenbareKosten),
+      grundhonorar100: eur(e?.grundhonorar100),
+      grundleistungen: eur(e?.grundleistungenVereinbart),
+      nebenkosten: vertrag.nebenkosten?.art === 'pauschal'
+        ? `pauschal ${prozent(vertrag.nebenkosten.prozent)}`
+        : (vertrag.nebenkosten?.art === 'einzeln' ? 'auf Einzelnachweis' : ''),
+      nebenkostenBetrag: eur(e?.nebenkosten),
+      // Ohne Wort und ohne Zeichen: Die Kammervorlage schreibt "eine Pauschale
+      // von ......... % des Nettohonorars" — dort gehoert die nackte Zahl hin.
+      nebenkostenProzentZahl: vertrag.nebenkosten?.art === 'pauschal'
+        ? prozent(vertrag.nebenkosten.prozent).replace(/\s*%$/, '') : '',
+      netto: eur(e?.netto),
+      ustSatz: prozent(einst.vorgaben.ustSatz),
+      stundensatz: eur(einst.vorgaben.stundensatz),
+      zahlungsziel: `${einst.vorgaben.zahlungsziel} Tage`,
+    } : {},
+
+    // Die beauftragten Leistungsphasen einzeln und als eine Zeile — je nachdem,
+    // ob die Vorlage eine Tabelle oder einen Satz vorsieht.
+    phasen: phasen.map((p) => ({
+      nr: String(p.nr),
+      bezeichnung: p.bezeichnung,
+      bewertung: prozent(p.bewertung),
+      vereinbart: prozent(p.vereinbart),
+      honorar: eur(p.betragVereinbart),
+    })),
+    phasenZeile: phasen.length
+      ? `Leistungsphasen ${phasen.map((p) => p.nr).join(', ')} (${prozent(
+        phasen.reduce((sum, p) => sum + p.vereinbart, 0))} des Grundhonorars)`
+      : '',
+
+    datum: (() => {
+      // Zweistellig: In einem Vertrag steht "09.09.2026", nicht "9.9.2026".
+      const de = heute.toLocaleDateString('de-DE',
+        { day: '2-digit', month: '2-digit', year: 'numeric' });
+      return {
+        heute: heute.toISOString().slice(0, 10),
+        heuteDe: de,
+        ort: b.ort || '',
+        ortDatum: [b.ort, de].filter(Boolean).join(', den '),
+      };
+    })(),
+  };
+}
+
+const satzText = (s) => {
+  if (!Number.isFinite(s)) return '';
+  if (s <= 0) return 'Basissatz';
+  if (s >= 1) return 'Höchstsatz';
+  if (Math.abs(s - 0.5) < 1e-9) return 'Mittelsatz';
+  return `${prozent(s)} zwischen Basis- und Höchstsatz`;
+};
