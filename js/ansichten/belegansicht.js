@@ -13,11 +13,12 @@ import { el, leeren, melden, eurZeigen, feld, zahlLesen, isoNachDe, bestaetigen,
 import { SPEICHER, lesen, alle, einstellungenLesen, anschriftZeilen, telefonZeigen, personName } from '../db.js';
 import {
   BELEGART_TEXT, IST_RECHNUNG, STATUS, belegRechnen, belegFestschreiben,
-  belegStornieren, zahlungErfassen,
+  belegStornieren, zahlungErfassen, vertraegeZuProjekt, ermittlungAusVertrag,
 } from '../vorgang.js';
 import { rechnungHtml } from '../beleg/rechnung_html.js';
 import { CD_KREATIVLABOR42, SCHRIFTEN } from '../beleg/cd.js';
 import { pruefePflichtangaben } from '../beleg/pflichtangaben.js';
+import { xrechnungXml, pruefeERechnung } from '../beleg/xrechnung.js';
 import { prozent } from '../hoai/geld.js';
 
 export async function belegAnsehen(wurzel, belegId) {
@@ -50,6 +51,24 @@ export async function belegAnsehen(wurzel, belegId) {
     }
   }
 
+  // Beim Nachtrag wird der vorherige Vertragsstand mitgerechnet. Ohne ihn zeigte
+  // das Blatt nur eine neue Zahl, und der Auftraggeber muesste die alte selbst
+  // heraussuchen — genau das macht Nachtraege streitanfaellig. Alte Versionen
+  // werden nie veraendert, der Vergleich bleibt deshalb auch spaeter derselbe.
+  let vergleich = null;
+  if (beleg.art === 'NA' && vertrag) {
+    vergleich = {
+      grund: vertrag.grund, gueltigAb: vertrag.gueltigAb,
+    };
+    const stände = beleg.projektId ? await vertraegeZuProjekt(beleg.projektId) : [];
+    const vorher = stände.filter((v) => (v.version || 0) < (vertrag.version || 0)).pop();
+    if (vorher) {
+      vergleich.vorherVersion = vorher.version;
+      vergleich.vorherDatum = vorher.gueltigAb;
+      try { vergleich.vorher = ermittlungAusVertrag(vorher); } catch { /* dann ohne Zahlen */ }
+    }
+  }
+
   const belegdaten = () => ({
     belegart: beleg.art,
     // Der Beleg bekommt die zusammengesetzten Zeilen, nicht die Einzelfelder.
@@ -75,9 +94,31 @@ export async function belegAnsehen(wurzel, belegId) {
     anrede: beleg.anrede,
     anschreiben: beleg.anschreiben,
     verweise: verweiseAus(vertrag),
+    // Angebot und Nachtrag tragen eigene Blaetter: Leistungsbeschreibung,
+    // Gegenueberstellung und Annahmeerklaerung.
+    vertrag,
+    bindefrist: beleg.bindefrist || '',
+    grundleistungenZeigen: beleg.grundleistungenZeigen !== false,
+    vergleich,
   });
 
   const html = () => rechnungHtml(belegdaten());
+
+  // ── E-Rechnung ───────────────────────────────────────
+  // Die Norm verlangt Angaben, die auf dem gedruckten Blatt nicht vorkommen:
+  // eine Kaeuferreferenz, elektronische Adressen beider Seiten, ein Datum statt
+  // eines Zeitraums. Sie werden hier zusammengetragen, nicht in der Beleglogik —
+  // ein gedruckter Beleg bleibt vollstaendig, auch wenn sie fehlen.
+  const erechnungdaten = () => ({
+    ...belegdaten(),
+    leitwegId: adresse?.leitwegId || '',
+    bestellnummer: beleg.bestellnummer || projekt?.bestellnummer || '',
+    empfaengerMail: adresse?.mail || '',
+    empfaengerUstId: adresse?.ustId || '',
+    faelligkeit: beleg.faelligkeit || tagePlus(beleg.datum, einst.vorgaben.zahlungsziel),
+    zahlungsbedingung: `Zahlbar ohne Abzug innerhalb von ${einst.vorgaben.zahlungsziel} Tagen.`,
+    leistungsdatum: beleg.leistungsdatum || beleg.datum,
+  });
 
   // ── Kopf ─────────────────────────────────────────────
   wurzel.append(
@@ -132,7 +173,38 @@ export async function belegAnsehen(wurzel, belegId) {
         class: 'knopf zweit',
         onclick: () => versenden(beleg, projekt, adresse, einst.vorgaben.ablageschema, abrechnung, html()),
       }, 'Per Mail'),
+      IST_RECHNUNG(beleg.art) ? el('button', {
+        class: 'knopf zweit',
+        onclick: async () => {
+          const daten = erechnungdaten();
+          const p = pruefeERechnung(daten);
+          if (!p.ok && !await bestaetigen('Angaben fehlen — trotzdem erzeugen?',
+            `${p.fehlend.map((f) => `• ${f.feld} (${f.fundstelle})`).join('\n')}\n\n`
+            + 'Ein öffentlicher Auftraggeber weist den Datensatz dann maschinell ab. '
+            + 'Für einen privaten Auftraggeber kann er trotzdem brauchbar sein.')) return;
+          const name = dateiname(beleg, projekt, adresse, einst.vorgaben.ablageschema, 'xml');
+          dateiSpeichern(name, xrechnungXml(daten), 'application/xml;charset=utf-8');
+          melden(`Gesichert als ${name} — enthält Bankverbindung und Steuernummer.`);
+        },
+      }, 'E-Rechnung (XML)') : null,
     ));
+
+  // ── Was der E-Rechnung fehlt ─────────────────────────
+  if (IST_RECHNUNG(beleg.art)) {
+    const p = pruefeERechnung(erechnungdaten());
+    if (!p.ok) {
+      wurzel.append(el('div', { class: 'karte' },
+        el('h3', { text: 'Für die E-Rechnung fehlen Angaben' }),
+        el('p', { class: 'klein', text: 'Öffentliche Auftraggeber nehmen nur XRechnungen an und '
+          + 'prüfen sie maschinell. Für den gedruckten Beleg ändert das nichts.' }),
+        el('ul', { class: 'liste' }, ...p.fehlend.map((f) => el('li', {},
+          el('div', { class: 'eintrag' }, el('div', { class: 'haupt' },
+            el('div', { class: 'titel', text: f.feld }),
+            el('div', { class: 'neben', text: f.fundstelle }))),
+        ))),
+      ));
+    }
+  }
 
   // ── Zahlungen ────────────────────────────────────────
   if (IST_RECHNUNG(beleg.art) && beleg.status === STATUS.FEST) {
@@ -280,7 +352,9 @@ function versenden(beleg, projekt, adresse, schema, abrechnung, html) {
     '',
     beleg.anschreiben || `anbei erhalten Sie die ${BELEGART_TEXT[beleg.art]} ${beleg.nummer}.`,
     '',
-    `Betrag zur Zahlung: ${eurZeigen(abrechnung.zahlbetrag)}`,
+    IST_RECHNUNG(beleg.art)
+      ? `Betrag zur Zahlung: ${eurZeigen(abrechnung.zahlbetrag)}`
+      : `${beleg.art === 'AN' ? 'Angebotssumme' : 'Nachtragssumme'}: ${eurZeigen(abrechnung.zahlbetrag)}`,
     '',
     'Mit freundlichen Grüßen',
   ].join('\n');
@@ -288,4 +362,12 @@ function versenden(beleg, projekt, adresse, schema, abrechnung, html) {
     + `?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(koerper)}`;
   window.location.href = url;
   melden('Mailentwurf geöffnet — die gesicherte Datei bitte selbst anhängen.', '');
+}
+
+/** Datum plus Tage, beides als ISO. Fuer die Faelligkeit der E-Rechnung. */
+function tagePlus(iso, tage) {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + (tage || 0));
+  return d.toISOString().slice(0, 10);
 }

@@ -312,6 +312,11 @@ export function adresseBearbeiten(adresse, danach) {
       label: 'Leitweg-ID', wert: adresse?.leitwegId || '',
       hinweis: 'Nur bei öffentlichen Auftraggebern — ohne sie wird eine XRechnung abgewiesen.',
     }),
+    ustId: feld({
+      label: 'USt-IdNr. des Empfängers', wert: adresse?.ustId || '',
+      hinweis: 'Nur nötig, wenn sie auf der Rechnung stehen soll — z. B. bei Leistungen '
+        + 'ins EU-Ausland.',
+    }),
   };
   dialog(adresse ? 'Kontakt bearbeiten' : 'Kontakt anlegen',
     [f.name, f.zusatz,
@@ -320,7 +325,7 @@ export function adresseBearbeiten(adresse, danach) {
       f.strasse, f.zeile2,
       el('div', { class: 'reihe-plzort' }, f.plz, f.ort),
       f.mail, el('div', { class: 'feldreihe' }, f.telefon, f.mobil), f.web,
-      f.notiz, f.leitweg],
+      f.notiz, f.leitweg, f.ustId],
     async () => {
       const name = f.name.eingabe.value.trim();
       if (!name) { melden('Der Name fehlt.', 'fehler'); return false; }
@@ -343,6 +348,7 @@ export function adresseBearbeiten(adresse, danach) {
         web: f.web.eingabe.value.trim(),
         notiz: f.notiz.eingabe.value.trim(),
         leitwegId: f.leitweg.eingabe.value.trim(),
+        ustId: f.ustId.eingabe.value.trim(),
         quelle: adresse?.quelle || 'eigen',
       });
       melden('Gespeichert.'); danach(); return true;

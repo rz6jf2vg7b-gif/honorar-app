@@ -19,9 +19,27 @@
 
 import { eur, prozent } from '../hoai/geld.js';
 import { cdVervollstaendigen, cdAlsCssVariablen, CD_KREATIVLABOR42 } from './cd.js';
+import { angebotsblaetter } from './angebot.js';
 
 const h = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * Der Satz unter der Angebotssumme. Er tritt an die Stelle der
+ * Zahlungsaufforderung — ein Angebot fordert nichts, es bindet nur.
+ */
+function bindetext(d) {
+  const frist = deDatum(d.bindefrist);
+  if (frist) {
+    return `An dieses Angebot halte ich mich bis zum ${frist} gebunden. `
+      + `Die Vergütung wird erst mit Auftragserteilung geschuldet.`;
+  }
+  return 'Dieses Angebot ist freibleibend. Die Vergütung wird erst mit Auftragserteilung geschuldet.';
+}
+
+/** ISO-Datum in die deutsche Schreibweise; alles andere bleibt, wie es kam. */
+const deDatum = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))
+  ? String(d).split('-').reverse().join('.') : String(d || ''));
 
 /** "29.07.2022" -> "29 · 07 · 2022" (Fusszeilenformat aus BR·03b) */
 function datumGesperrt(d) {
@@ -52,6 +70,29 @@ function bausteinHtml(b) {
       <p>${h(b.text)}</p>
       ${b.fundstelle ? `<p class="fundstelle">${h(b.fundstelle)}</p>` : ''}
     </div>`;
+  }
+  if (b.art === 'leistungsliste') {
+    // Die Grundleistungen im Wortlaut der Verordnung. Der Buchstabe steht vorn,
+    // damit sich eine einzelne Leistung im Streitfall benennen laesst
+    // ("Anlage 10, LPh 3, Buchstabe c") statt nur beschreiben.
+    return `<div class="block leistungsliste">
+      ${b.titel ? `<h3>${h(b.titel)}</h3>` : ''}
+      ${b.quelle ? `<p class="quelle">Grundleistungen nach ${h(b.quelle)}</p>` : ''}
+      <dl class="gl">${b.eintraege.map((g) => `
+        <div><dt>${h(g.marke)}</dt><dd>${h(g.text)}</dd></div>`).join('')}
+      </dl></div>`;
+  }
+  if (b.art === 'unterschrift') {
+    return `<div class="block unterschriftsblock">
+      ${b.titel ? `<h3>${h(b.titel)}</h3>` : ''}
+      <div class="unterschriften">${b.felder.map((f) => `
+        <div class="usfeld">
+          <div class="uszeile"><div class="uslinie"></div>
+            <div class="uslabel">Ort, Datum</div></div>
+          <div class="uszeile"><div class="uslinie"></div>
+            <div class="uslabel">${h(f.rolle)}${f.name ? ` · ${h(f.name)}` : ''}</div></div>
+        </div>`).join('')}
+      </div></div>`;
   }
   if (b.art === 'tabelle') {
     const numAb = b.spalten.length - (b.spalten.length > 4 ? 4 : 1);
@@ -89,6 +130,9 @@ function bausteinHtml(b) {
  * @param {string} [d.anschreiben]
  * @param {string} [d.leistungszeitraum]
  * @param {string} [d.zahlungsziel]
+ * @param {object} [d.vertrag]     Vertragsstand — Grundlage der Leistungsbeschreibung
+ * @param {string} [d.bindefrist]  ISO-Datum, bis zu dem das Angebot bindet
+ * @param {object} [d.vergleich]   {vorher, grund, ...} fuer die Nachtragsgegenueberstellung
  */
 export function rechnungHtml(d) {
   const cd = cdVervollstaendigen(d.cd || CD_KREATIVLABOR42);
@@ -233,8 +277,7 @@ export function rechnungHtml(d) {
     ${fordertGeld ? `<p class="zahlungshinweis">${h(d.zahlungsziel
       || 'Bitte überweisen Sie den Rechnungsbetrag ohne Abzüge auf das folgende Konto.')}
       ${b.bank ? `<br><span class="bank">${h(b.bank)} · IBAN ${h(b.iban || '')} · BIC ${h(b.bic || '')}</span>` : ''}</p>`
-    : `<p class="zahlungshinweis">${h(d.bindefrist
-      || 'Dieses Angebot ist freibleibend. Die Vergütung wird erst mit Auftragserteilung geschuldet.')}</p>`}
+    : `<p class="zahlungshinweis">${h(bindetext(d))}</p>`}
 
     <p class="gruss">Mit freundlichen Grüßen</p>
     <p class="signatur"><b>${h(b.inhaber || b.name)}</b>${b.funktion ? `<br>${h(b.funktion)}` : ''}</p>
@@ -359,6 +402,14 @@ export function rechnungHtml(d) {
       const zeilen = Math.ceil((b.text || '').length / 95) + (b.fundstelle ? 1 : 0);
       return zeilen * ZEILE_MM + ABSTAND_MM;
     }
+    if (b.art === 'leistungsliste') {
+      const zeilen = b.eintraege.reduce((s2, g) =>
+        s2 + Math.max(1, Math.ceil((g.text || '').length / 88)), 0);
+      return (b.titel ? 6 : 0) + (b.quelle ? ZEILE_MM : 0) + zeilen * ZEILE_MM + ABSTAND_MM;
+    }
+    // Ein Unterschriftsblock wird nie zerrissen: eine Unterschriftslinie ohne
+    // die Erklaerung darueber ist wertlos.
+    if (b.art === 'unterschrift') return 34;
     if (b.art === 'tabelle') {
       const kopf = (b.titel ? 6 : 0) + 5;
       const zeilen = b.zeilen.reduce((s, z) =>
@@ -369,34 +420,55 @@ export function rechnungHtml(d) {
     return 6;
   };
 
-  for (const e of ermittlungen) {
-    const bloecke = [[]];
+  /**
+   * Verteilt eine Folge von Bausteinen auf Seiten und haengt sie an.
+   * Wird von der Herleitung und von den Angebotsblaettern gleichermassen
+   * genutzt — beide brechen nach denselben Regeln um.
+   */
+  const blaetternUmbrechen = (titel, bausteine, untertitel = '') => {
+    const teile = [[]];
     let hoehe = KOPF_MM;
-    for (const b of e.herleitung) {
+    for (const b of bausteine) {
       const bh = blockHoehe(b);
-      if (hoehe + bh > NUTZHOEHE_MM && bloecke[bloecke.length - 1].length) {
-        bloecke.push([]);
+      if (hoehe + bh > NUTZHOEHE_MM && teile[teile.length - 1].length) {
+        teile.push([]);
         hoehe = 0;
       }
-      bloecke[bloecke.length - 1].push(b);
+      teile[teile.length - 1].push(b);
       hoehe += bh;
     }
 
-    bloecke.forEach((block, i) => {
+    teile.forEach((block, i) => {
       seiten.push(`
 <section class="seite folgeseite">
   ${marken}
   ${seitenkopf}
   ${sidebar(false)}
   <main class="folgetext">
-    <h2>Darstellung der Honorarermittlung${bloecke.length > 1 ? ` — Blatt ${i + 1} von ${bloecke.length}` : ''}</h2>
-    ${i === 0 ? `<p class="leistung">${h(e.bezeichnung)}</p>` : ''}
+    <h2>${h(titel)}${teile.length > 1 ? ` — Blatt ${i + 1} von ${teile.length}` : ''}</h2>
+    ${i === 0 && untertitel ? `<p class="leistung">${h(untertitel)}</p>` : ''}
     ${block.map(bausteinHtml).join('')}
   </main>
   __FUSS__
 </section>`);
     });
+  };
+
+  // ── Angebot und Nachtrag: eigene Blaetter ──────────────
+  // Sie stehen vor der Herleitung, weil zuerst interessiert, WAS angeboten wird,
+  // und erst danach, wie sich der Betrag errechnet. Die Annahmeerklaerung bleibt
+  // das letzte Blatt — sie wird unterschrieben zurueckgeschickt.
+  const zusatz = angebotsblaetter(d);
+  const annahme = zusatz.filter((b) => /Annahme|Nachtragsvereinbarung/.test(b.titel));
+  for (const blatt of zusatz.filter((b) => !annahme.includes(b))) {
+    blaetternUmbrechen(blatt.titel, blatt.bausteine);
   }
+
+  for (const e of ermittlungen) {
+    blaetternUmbrechen('Darstellung der Honorarermittlung', e.herleitung, e.bezeichnung);
+  }
+
+  for (const blatt of annahme) blaetternUmbrechen(blatt.titel, blatt.bausteine);
 
   const gesamt = seiten.length;
   const body = seiten.map((s, i) => s.replace('__FUSS__', fusszeile(i + 1, gesamt))).join('\n');
@@ -560,6 +632,23 @@ table{ border-collapse:collapse; width:100%; }
 .hinweis p{ margin:0; color:var(--grey-2); }
 .hinweis .fundstelle{ margin-top:1mm; font:var(--pt-mono-klein)/1.4 var(--mono) !important;
   letter-spacing:.06em; }
+
+/* ── Leistungsliste (Grundleistungen im Wortlaut) ─────── */
+.leistungsliste .quelle{ margin:0 0 1.5mm; font:var(--pt-mono-klein)/1.4 var(--mono);
+  letter-spacing:.06em; color:var(--grey-2); }
+dl.gl{ margin:0; }
+dl.gl div{ display:flex; gap:3mm; padding:.35mm 0; align-items:baseline; }
+dl.gl dt{ flex:0 0 5mm; font-family:var(--mono); color:var(--accent); }
+dl.gl dd{ margin:0; flex:1 1 auto; }
+
+/* ── Unterschriften ───────────────────────────────────── */
+.unterschriften{ display:flex; gap:12mm; margin-top:4mm; }
+.usfeld{ flex:1 1 0; }
+.uszeile{ margin-top:14mm; }
+.uslinie{ border-top:.5pt solid var(--ink); }
+.uslabel{ margin-top:1.2mm; font:var(--pt-mono-klein)/1.3 var(--mono); letter-spacing:.08em;
+  color:var(--grey-2); }
+.folgetext .uslabel,.folgetext .leistungsliste .quelle{ font-size:var(--pt-mono-klein); }
 
 /* ── Fußbereich ───────────────────────────────────────── */
 .fussnoten{ position:absolute; left:var(--links); right:var(--rechts); bottom:25mm;

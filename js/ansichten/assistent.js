@@ -44,8 +44,12 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     einbehaltBrutto: 0,
     einbehaltText: '',
     leistungszeitraum: '',
+    leistungsdatum: '',
     anrede: '',
     anschreiben: '',
+    // Angebot und Nachtrag
+    bindefrist: '',
+    grundleistungenZeigen: true,
     leistungsstand: {},
   };
 
@@ -637,6 +641,15 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       onEingabe: (w) => { entwurf.leistungszeitraum = w; },
     });
 
+    // Die E-Rechnung braucht ein Datum, keinen Satz: BT-72 ist ein Datumsfeld.
+    // Der Freitext oben bleibt trotzdem — er steht auf dem Blatt und darf mehr
+    // sagen als ein Stichtag ("bis 07.09.2026, LPh 1 bis 5").
+    const leistungsdatumF = feld({
+      label: 'Leistungsdatum', art: 'date', wert: entwurf.leistungsdatum || entwurf.datum,
+      hinweis: 'Tag, an dem die abgerechnete Leistung erbracht war. Wird für die E-Rechnung gebraucht.',
+      onAenderung: (w) => { entwurf.leistungsdatum = w; },
+    });
+
     const ustF = feld({
       label: 'Umsatzsteuer', art: 'zahl', einheit: '%', wert: zahlZeigen(entwurf.ustSatz * 100),
       onEingabe: (w) => { entwurf.ustSatz = (w ?? 0) / 100; },
@@ -654,8 +667,41 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
 
     box.append(
       el('div', { class: 'feldreihe' }, nummerF, datumF),
-      zeitraumF, ustF, anredeF, textF,
+      el('div', { class: 'feldreihe' }, zeitraumF, leistungsdatumF),
+      ustF, anredeF, textF,
     );
+
+    // ── Angebot und Nachtrag ───────────────────────────
+    // Ohne Annahmefrist gilt § 147 Abs. 2 BGB: das Angebot erlischt, sobald die
+    // Antwort "unter regelmäßigen Umständen" nicht mehr zu erwarten ist — wann
+    // das ist, weiß niemand. Eine gesetzte Frist beendet den Streit darüber,
+    // deshalb steht hier ein Vorschlag statt eines leeren Feldes.
+    if (!IST_RECHNUNG(entwurf.art)) {
+      const istNachtrag = entwurf.art === BELEGART.NACHTRAG;
+      if (!entwurf.bindefrist) entwurf.bindefrist = tagePlus(entwurf.datum, 30);
+
+      const bindeF = feld({
+        label: istNachtrag ? 'Nachtragsangebot bindend bis' : 'Angebot bindend bis',
+        art: 'date', wert: entwurf.bindefrist,
+        hinweis: 'Bis zu diesem Tag ist das Angebot bindend (§ 148 BGB). Leer lassen heißt: '
+          + 'keine Frist bestimmt, dann gilt § 147 Abs. 2 BGB.',
+        onAenderung: (w) => { entwurf.bindefrist = w; },
+      });
+
+      const glF = feld({
+        label: 'Grundleistungen abdrucken', art: 'auswahl',
+        wert: entwurf.grundleistungenZeigen ? 'ja' : 'nein',
+        optionen: [
+          { wert: 'ja', text: 'ja — Wortlaut der Anlagen je Leistungsphase' },
+          { wert: 'nein', text: 'nein — nur die Leistungsphasen mit ihrer Bewertung' },
+        ],
+        hinweis: 'Der Wortlaut macht das Angebot länger, aber prüfbar: Es steht dann fest, '
+          + 'welche Leistung geschuldet ist und welche nicht.',
+        onAenderung: (w) => { entwurf.grundleistungenZeigen = w === 'ja'; },
+      });
+
+      box.append(el('h2', { text: istNachtrag ? 'Nachtrag' : 'Angebot' }), bindeF, glF);
+    }
 
     if (IST_RECHNUNG(entwurf.art)) {
       const einbehaltF = feld({
@@ -798,4 +844,12 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
   });
 
   zeichnen();
+}
+
+/** Datum plus Tage, beides als ISO. Fuer den Vorschlag der Bindefrist. */
+function tagePlus(iso, tage) {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + tage);
+  return d.toISOString().slice(0, 10);
 }
