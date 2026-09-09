@@ -73,7 +73,11 @@ function leistungsbeschreibung(d) {
   // Ohne Vertragsstand — Pauschale oder Zeithonorar. Dann gibt es keine
   // Leistungsphasen, sondern nur die angebotenen Positionen. Auch das ist eine
   // Leistungsbeschreibung, nur eine kuerzere.
-  if (!v || !v.leistungsbild) {
+  // Massgeblich ist, woraus gerechnet wurde -- nicht, ob zufaellig ein Vertrag
+  // am Beleg haengt. Sonst druckte ein Pauschalangebot die Honorarzone eines
+  // fremden Vertragsstands und schloss zugleich die Leistungsphasen aus, die es
+  // selbst anbietet (gefunden am 09.09.2026).
+  if (!v || !v.leistungsbild || e?.ausPositionen) {
     if (!e) return [];
     bausteine.push(hinweis(
       'Das Honorar ist frei vereinbart. Die Leistung ist durch die nachstehenden '

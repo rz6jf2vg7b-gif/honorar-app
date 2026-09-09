@@ -139,6 +139,10 @@ export function ermittlungAusPositionen(entwurf) {
 
   return {
     bezeichnung: entwurf.leistungsbezeichnung || 'Erbrachte Leistungen',
+    // Merkmal fuer das Blatt: Hier gibt es keine anrechenbaren Kosten und kein
+    // Grundhonorar. Ohne dieses Kennzeichen druckte der Beleg bis 09.09.2026
+    // "Anrechenbare Kosten 0,00 EUR" auf ein frei vereinbartes Angebot.
+    ausPositionen: true,
     anrechenbareKosten: 0,
     grundhonorar100: 0,
     grundleistungenVereinbart: 0,
@@ -242,6 +246,11 @@ export async function belegRechnen(entwurf, vertrag) {
   // Einzelrechnungen haben keinen Vertragsstand — ihre Positionen stehen direkt
   // am Beleg. Sie durch den Honorarkern zu schicken waere falsch: es gibt keine
   // anrechenbaren Kosten, keine Honorarzone und nichts zu interpolieren.
+  if (!ohneVertrag(entwurf) && !vertrag) {
+    throw new Error('Diesem Beleg fehlt der Vertragsstand: Ohne Leistungsbild, '
+      + 'anrechenbare Kosten und Honorarzone lässt sich kein Honorar ermitteln. '
+      + 'Trage die Vertragsdaten nach oder erfasse den Betrag als freie Position.');
+  }
   const ermittlung = ohneVertrag(entwurf)
     ? ermittlungAusPositionen(entwurf)
     : ermittlungAusVertrag(vertrag, entwurf.leistungsstand);
@@ -300,13 +309,17 @@ export async function belegSpeichern(beleg) {
  */
 export async function belegFestschreiben(beleg, vertrag) {
   if (beleg.status === STATUS.FEST) return beleg;
-  const { ermittlung, abrechnung } = await belegRechnen(beleg, vertrag);
+  // Ein Beleg aus freien Positionen hat keinen Vertragsstand -- ein Angebot ueber
+  // eine Pauschale etwa. belegRechnen() kennt diesen Fall (ohneVertrag), das
+  // Einfrieren verlangte bis 09.09.2026 trotzdem einen Vertrag und scheiterte
+  // beim Festschreiben mit "vertrag.version".
+  const { ermittlung, abrechnung } = await belegRechnen(beleg, vertrag || null);
 
   const satz = {
     ...beleg,
     status: STATUS.FEST,
     festgeschrieben: new Date().toISOString(),
-    vertragVersion: vertrag.version,
+    vertragVersion: vertrag?.version ?? null,
     summeNetto: abrechnung.rechnungsbetragNetto,
     ust: abrechnung.ust,
     brutto: abrechnung.brutto,
@@ -315,7 +328,7 @@ export async function belegFestschreiben(beleg, vertrag) {
     // Der eingefrorene Rechenstand. Alles, was der Beleg spaeter zum
     // Wiederherstellen braucht, ohne auf Vertrag oder Vorrechnungen zuzugreifen.
     snapshot: {
-      vertrag: JSON.parse(JSON.stringify(vertrag)),
+      vertrag: vertrag ? JSON.parse(JSON.stringify(vertrag)) : null,
       ermittlung: JSON.parse(JSON.stringify(ermittlung)),
       abrechnung: JSON.parse(JSON.stringify(abrechnung)),
     },

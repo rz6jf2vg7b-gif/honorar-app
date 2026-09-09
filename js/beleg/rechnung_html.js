@@ -222,9 +222,10 @@ export function rechnungHtml(d) {
     <div class="grundlagen">
       <h3>${h(e.bezeichnung)}</h3>
       <dl class="werte">
+        ${e.ausPositionen ? '' : `
         <div><dt>Anrechenbare Kosten</dt><dd>${h(eur(e.anrechenbareKosten))}</dd></div>
         <div><dt>Grundhonorar für 100 %</dt><dd>${h(eur(e.grundhonorar100))}</dd></div>
-        <div><dt>Grundleistungen (erbracht)</dt><dd>${h(eur(e.grundleistungen))}</dd></div>
+        <div><dt>Grundleistungen (erbracht)</dt><dd>${h(eur(e.grundleistungen))}</dd></div>`}
         ${e.zuschlaege.map((z) => `<div><dt>${h(z.bezeichnung)} (${h(prozent(z.prozent))})</dt>
           <dd>${h(eur(z.betrag))}</dd></div>`).join('')}
         ${e.weiterePositionen.map((p) => `<div><dt>${h(p.bezeichnung)}</dt>
@@ -266,7 +267,7 @@ export function rechnungHtml(d) {
     ${d.anrede ? `<p>${h(d.anrede)}</p>` : ''}
     ${d.anschreiben ? `<p>${h(d.anschreiben)}</p>` : ''}
 
-    <h2>Grundlagen des Honorars</h2>
+    <h2>${ermittlungen.every((e) => e.ausPositionen) ? 'Angebotene Leistungen' : 'Grundlagen des Honorars'}</h2>
     ${grundlagen}
 
     <div class="betrag">
@@ -465,6 +466,9 @@ export function rechnungHtml(d) {
   }
 
   for (const e of ermittlungen) {
+    // Eine Pauschale hat keine Herleitung. Ohne diese Pruefung entstand ein
+    // leeres Blatt "Darstellung der Honorarermittlung" im Kundendokument.
+    if (!(e.herleitung || []).length) continue;
     blaetternUmbrechen('Darstellung der Honorarermittlung', e.herleitung, e.bezeichnung);
   }
 

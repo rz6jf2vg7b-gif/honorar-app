@@ -148,7 +148,12 @@ export async function belegAnsehen(wurzel, belegId) {
   )));
 
   // ── Pflichtangaben ───────────────────────────────────
-  const pflicht = pruefePflichtangaben(belegdaten());
+  // Nur Rechnungen: Ein Angebot oder ein Nachtrag ist keine Rechnung im Sinne
+  // des § 14 UStG. Die App verlangte dort bis 09.09.2026 den Leistungszeitpunkt
+  // und behauptete, ohne ihn sei "die Rechnung" nicht vorsteuerabzugsfaehig.
+  const pflicht = IST_RECHNUNG(beleg.art)
+    ? pruefePflichtangaben(belegdaten())
+    : { ok: true, fehlend: [], hinweise: [] };
   if (!pflicht.ok) {
     wurzel.append(el('div', { class: 'karte' },
       el('h3', { text: 'Pflichtangaben fehlen' }),

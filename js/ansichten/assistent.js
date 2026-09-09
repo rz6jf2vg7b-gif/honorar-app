@@ -803,7 +803,11 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
 
   async function sichern(festschreiben) {
     try {
-      let vertrag = vertragBestand;
+      // Bei freien Positionen darf der Beleg auch keinen *vorhandenen* Vertrag
+      // des Projekts mitnehmen. Sonst standen auf einem Pauschalangebot die
+      // Honorarzone, der Honorarsatz und die Version eines HOAI-Vertrags, der
+      // mit diesem Angebot nichts zu tun hat (gefunden am 09.09.2026).
+      let vertrag = entwurf.honorarart === 'positionen' ? null : vertragBestand;
       // Vertragsdaten speichern, wenn neu oder geaendert
       // Kein Vertragsstand, wenn über Positionen gerechnet wird: Ein Angebot
       // über eine Pauschale legt keinen HOAI-Vertragsstand an, gegen den später
