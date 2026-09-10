@@ -201,7 +201,8 @@ export async function projektAnsehen(wurzel, projektId) {
   wurzel.append(el('h2', { text: `Vertragsstände (${vertraege.length})` }));
   if (!vertraege.length) {
     wurzel.append(el('div', { class: 'leer' },
-      el('p', { class: 'klein', text: 'Noch kein Vertragsstand. Er entsteht beim ersten Angebot oder der ersten Rechnung.' })));
+      el('p', { class: 'klein', text: 'Noch kein Vertragsstand. Er entsteht beim ersten Angebot '
+        + 'oder der ersten Rechnung — oder du erfasst ihn hier zuerst.' })));
   } else {
     wurzel.append(el('ul', { class: 'liste' }, ...vertraege.slice().reverse().map((v) => {
       const lb = LEISTUNGSBILDER[v.leistungsbild];
@@ -286,6 +287,12 @@ export async function projektAnsehen(wurzel, projektId) {
       class: 'knopf zweit',
       onclick: () => mahnungFormular(wurzel, projekt, adressen, eigene),
     }, 'Mahnung'),
+    el('button', {
+      class: 'knopf zweit',
+      onclick: () => vertragFormular(wurzel, projekt, () => {
+        leeren(wurzel); projektAnsehen(wurzel, projektId);
+      }),
+    }, vertraege.length ? 'Vertragsstand fortschreiben' : 'Vertragsdaten erfassen'),
     el('button', {
       class: 'knopf zweit',
       onclick: async () => {
@@ -534,12 +541,22 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
     optionen: MAHNSTUFEN.map((s) => ({ wert: String(s.nr), text: `${s.nr}. ${s.titel}` })),
   });
   const datumF = feld({ label: 'Datum der Mahnung', art: 'date', wert: heute });
+  // Ist am Kontakt nie festgelegt worden, ob er Verbraucher ist, wird hier
+  // einmal gefragt — und die Antwort bleibt am Kontakt. Eine stille Vorgabe
+  // waere in beide Richtungen falsch: Zu hoch angesetzt ist die Zinsforderung
+  // unberechtigt, zu niedrig verschenkt man Geld.
+  const unbekannt = empf && empf.istVerbraucher === undefined;
   const verbraucherF = feld({
     label: '', art: 'schalter', wert: !!empf?.istVerbraucher,
-    schaltertext: 'Empfänger ist Verbraucher',
+    schaltertext: 'Empfänger ist Verbraucher (private Bauherrschaft)',
     hinweis: 'Verbraucher: 5 Prozentpunkte über dem Basiszinssatz (§ 288 Abs. 1 BGB) und '
       + 'keine 40-€-Pauschale. Sonst 9 Prozentpunkte (§ 288 Abs. 2 BGB).',
   });
+  const frage = unbekannt ? el('div', { class: 'karte' },
+    el('h3', { text: `Ist „${empf.name}" Verbraucher?` }),
+    el('p', { class: 'klein', text: 'Das ist bei diesem Kontakt noch nicht festgelegt und '
+      + 'entscheidet über den Verzugszins und die 40-€-Pauschale. Die Antwort wird am '
+      + 'Kontakt gespeichert und hier nicht wieder gefragt.' })) : null;
   const pauschaleF = feld({
     label: '', art: 'schalter', wert: false,
     schaltertext: 'Verzugspauschale 40 € ansetzen (§ 288 Abs. 5 BGB)',
@@ -604,6 +621,7 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
       + 'Verzugszinsen werden taggenau ab Fälligkeit gerechnet.' }),
     el('div', { class: 'feldreihe' }, stufeF, datumF),
     historie,
+    frage,
     ...auswahl.map((x) => x.f),
     verbraucherF, pauschaleF,
     vorschau,
@@ -637,6 +655,13 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
           w.document.open(); w.document.write(html); w.document.close();
           setTimeout(() => { try { w.print(); } catch { /* egal */ } }, 700);
 
+          // Die Antwort auf die Verbraucherfrage bleibt am Kontakt — beim
+          // naechsten Mahnlauf soll sie nicht wieder gestellt werden.
+          if (unbekannt && empf) {
+            await schreiben(SPEICHER.ADRESSEN,
+              { ...empf, istVerbraucher: verbraucherF.eingabe.checked });
+          }
+
           // Erst jetzt vermerken: Was nur angesehen wurde, ist nicht verschickt.
           const { mahnungVermerken } = await import('../vorgang.js');
           await mahnungVermerken(m.zeilen.map((z) => z.beleg.id), {
@@ -648,6 +673,89 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
       }, 'Mahnung drucken')),
   );
   rechnen();
+  document.body.append(dlg);
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.showModal();
+}
+
+/**
+ * Vertragsdaten am Projekt erfassen — der Weg, der nicht beim Beleg beginnt.
+ *
+ * Beide Reihenfolgen kommen in der Praxis vor (Steffens Entscheidung vom
+ * 10.09.2026): Ein kleiner Auftrag entsteht als Angebot, und die Vertragsdaten
+ * fallen dabei ab. Bei einem groesseren steht der Vertrag zuerst — Honorarzone,
+ * anrechenbare Kosten und Leistungsphasen werden mit dem Bauherrn besprochen,
+ * lange bevor ein Blatt gedruckt wird.
+ *
+ * Der so erfasste Stand ist noch nicht beauftragt: Er wird es mit der Annahme
+ * des Angebots, das daraus entsteht.
+ */
+async function vertragFormular(wurzel, projekt, fertig) {
+  const { vertragsformular } = await import('./vertragsformular.js');
+  const { vertragAnlegen, aktuellerVertrag } = await import('../vorgang.js');
+  const { einstellungenLesen } = await import('../db.js');
+  const einst = await einstellungenLesen();
+  const bestand = await aktuellerVertrag(projekt.id);
+
+  const dlg = el('dialog', { class: 'karte', style: 'max-width:720px;width:96%;border-radius:2px;' });
+  const grundF = feld({
+    label: 'Anlass', wert: bestand ? 'Nachtrag' : 'Auftrag',
+    platzhalter: 'z. B. geänderte Kostenberechnung',
+  });
+  const abF = feld({ label: 'Gültig ab', art: 'date', wert: heuteIso() });
+
+  let daten = null;
+  const formular = vertragsformular({
+    vertrag: bestand ? JSON.parse(JSON.stringify(bestand)) : null,
+    vorgaben: einst.vorgaben,
+    onAenderung: (d) => { daten = d; },
+  });
+  daten = formular.lesen();
+
+  dlg.append(
+    el('h3', { text: bestand ? 'Vertragsstand fortschreiben' : 'Vertragsdaten erfassen' }),
+    el('p', { class: 'klein', text: bestand
+      ? `Ausgehend von Version ${bestand.version}. Der bisherige Stand bleibt unverändert erhalten.`
+      : 'Der Stand gilt als noch nicht beauftragt, bis ein Angebot daraus angenommen wird.' }),
+    el('div', { class: 'feldreihe' }, grundF, abF),
+    formular,
+    el('div', { class: 'knopfreihe' },
+      el('button', { class: 'knopf zweit', onclick: () => dlg.close() }, 'Abbrechen'),
+      el('button', {
+        class: 'knopf',
+        onclick: async () => {
+          try {
+            const v = await vertragAnlegen({
+              projektId: projekt.id,
+              daten: { ...formular.lesen(), beauftragt: false },
+              grund: grundF.eingabe.value.trim() || (bestand ? 'Nachtrag' : 'Auftrag'),
+              gueltigAb: abF.eingabe.value || heuteIso(),
+            });
+            melden(`Vertragsstand Version ${v.version} angelegt.`);
+            dlg.close();
+            fertig();
+          } catch (f) { melden(f.message, 'fehler'); }
+        },
+      }, 'Speichern'),
+      el('button', {
+        class: 'knopf akzent',
+        onclick: async () => {
+          try {
+            const v = await vertragAnlegen({
+              projektId: projekt.id,
+              daten: { ...formular.lesen(), beauftragt: false },
+              grund: grundF.eingabe.value.trim() || (bestand ? 'Nachtrag' : 'Auftrag'),
+              gueltigAb: abF.eingabe.value || heuteIso(),
+            });
+            melden(`Vertragsstand Version ${v.version} angelegt.`);
+            dlg.close();
+            // Direkt weiter zum Angebot: Der Assistent findet den Stand als
+            // vorhandenen Vertrag und überspringt das Erfassen.
+            location.hash = `#neu/${projekt.id}`;
+          } catch (f) { melden(f.message, 'fehler'); }
+        },
+      }, 'Speichern und Angebot dazu')),
+  );
   document.body.append(dlg);
   dlg.addEventListener('close', () => dlg.remove());
   dlg.showModal();

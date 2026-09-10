@@ -116,7 +116,11 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       s.push('vertrag');
       if (IST_RECHNUNG(entwurf.art)) s.push('stand');
     }
-    s.push('beleg', 'pruefen');
+    // Zahlungsmodalitaeten als eigener Schritt: Skonto, Einbehalt, Zahlungsziel
+    // und Zahlungsplan gehoeren fachlich zusammen und haben mit dem Anschreiben
+    // nichts zu tun. Zusammen auf einem Blatt war es die Stelle, an der man den
+    // Ueberblick verliert (Steffens Rueckmeldung 10.09.2026).
+    s.push('beleg', 'zahlung', 'pruefen');
     return s;
   };
 
@@ -150,7 +154,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       art: schrittArt, projekt: schrittProjekt, empfaenger: schrittEmpfaenger,
       honorarart: schrittHonorarart,
       vertrag: schrittVertrag, stand: schrittStand, positionen: schrittPositionen,
-      beleg: schrittBeleg, pruefen: schrittPruefen,
+      beleg: schrittBeleg, zahlung: schrittZahlung, pruefen: schrittPruefen,
     })[name](inhalt);
   }
 
@@ -871,7 +875,6 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       });
 
       box.append(el('h2', { text: istNachtrag ? 'Nachtrag' : 'Angebot' }), bindeF);
-      box.append(zahlungsplanFormular());
       // Nur bei einer Ermittlung nach HOAI: Eine Pauschale hat keine
       // Leistungsphasen, deren Wortlaut sich abdrucken liesse -- der Schalter
       // lief dort ins Leere.
@@ -903,6 +906,25 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
         box.append(el('h2', { text: 'Grundlage' }), bezugF);
       }
     }
+
+
+    box.append(weiterLeiste('Weiter', async () => {
+      if (!entwurf.nummer) { melden('Die Belegnummer fehlt.', 'fehler'); return; }
+      if (!await nummerFrei(entwurf.nummer, entwurf.id)) {
+        melden('Diese Belegnummer ist bereits vergeben.', 'fehler'); return;
+      }
+      schritt++; zeichnen();
+    }));
+  }
+
+  // ── 7 Zahlung ────────────────────────────────────────
+  //
+  // Alles, was mit Geldfluss zu tun hat, an einer Stelle: Abrechnungsart,
+  // Einbehalt, Zahlungsstand, Skonto — und beim Angebot der Zahlungsplan.
+  // Vorher lag das zwischen Anschreiben und Bindefrist auf einem Blatt, das
+  // niemand mehr überblickte.
+  function schrittZahlung(box) {
+    box.append(el('h1', { text: 'Zahlung' }));
 
     if (IST_RECHNUNG(entwurf.art)) {
       const einbehaltF = feld({
@@ -958,13 +980,11 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
         zahlungF, el('div', { class: 'feldreihe' }, skontoF, skontoTageF));
     }
 
-    box.append(weiterLeiste('Weiter', async () => {
-      if (!entwurf.nummer) { melden('Die Belegnummer fehlt.', 'fehler'); return; }
-      if (!await nummerFrei(entwurf.nummer, entwurf.id)) {
-        melden('Diese Belegnummer ist bereits vergeben.', 'fehler'); return;
-      }
-      schritt++; zeichnen();
-    }));
+    if (!IST_RECHNUNG(entwurf.art)) {
+      box.append(zahlungsplanFormular());
+    }
+
+    box.append(weiterLeiste('Weiter'));
   }
 
   // ── 7 Prüfen und speichern ───────────────────────────
