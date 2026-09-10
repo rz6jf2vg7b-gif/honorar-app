@@ -42,8 +42,13 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     nummer: '',
     ustSatz: einst.vorgaben.ustSatz,
     kumulativ: true,
-    zahlungsstandZeigen: false,
-    zahlungsstandVerrechnen: false,
+    // Ab Werk an: Bleibt eine frühere Abschlagsrechnung teilweise unbezahlt,
+    // gehört die Differenz in den Zahlbetrag der nächsten — sonst muss man sie
+    // getrennt mahnen und hat zwei Forderungen über denselben Vorgang. Andere
+    // Honorarprogramme führen das ebenso. Die Umsatzsteuer bleibt unberührt: Sie
+    // fällt auf die Leistung an, nicht auf das Zahlungsverhalten.
+    zahlungsstandZeigen: true,
+    zahlungsstandVerrechnen: true,
     einbehaltBrutto: 0,
     einbehaltText: '',
     leistungszeitraum: '',
@@ -608,11 +613,11 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
               onEingabe: (w) => { p.stunden = w ?? 0; summe(); },
             }),
             feld({
-              label: 'Stundensatz', art: 'zahl', einheit: '€', wert: zahlZeigen(p.satz ?? einst.vorgaben.stundensatz),
+              label: 'Stundensatz', art: 'geld', einheit: '€', wert: zahlZeigen(p.satz ?? einst.vorgaben.stundensatz),
               onEingabe: (w) => { p.satz = w ?? 0; summe(); },
             }))
           : feld({
-            label: 'Betrag', art: 'zahl', einheit: '€ netto', wert: p.betrag ? zahlZeigen(p.betrag) : '',
+            label: 'Betrag', art: 'geld', einheit: '€ netto', wert: p.betrag ? zahlZeigen(p.betrag) : '',
             onEingabe: (w) => { p.betrag = w ?? 0; summe(); },
           });
 
@@ -777,7 +782,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
 
     if (IST_RECHNUNG(entwurf.art)) {
       const einbehaltF = feld({
-        label: 'Rechnungseinbehalt', art: 'zahl', einheit: '€ brutto',
+        label: 'Rechnungseinbehalt', art: 'geld', einheit: '€ brutto',
         wert: entwurf.einbehaltBrutto ? zahlZeigen(entwurf.einbehaltBrutto) : '',
         hinweis: 'Brutto vereinbart, netto abgezogen — sonst stimmt der Steuerausweis nicht.',
         onEingabe: (w) => { entwurf.einbehaltBrutto = w ?? 0; },
@@ -803,7 +808,8 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
           { wert: 'zeigen', text: 'offene Posten anzeigen' },
           { wert: 'verrechnen', text: 'offene Posten anzeigen und verrechnen' },
         ],
-        hinweis: 'Verrechnen heißt: Über- und Unterzahlungen früherer Rechnungen fließen in den Zahlbetrag ein.',
+        hinweis: 'Verrechnen heißt: Über- und Unterzahlungen früherer Rechnungen fließen in '
+          + 'den Zahlbetrag ein — der Rechnungsbetrag und die Umsatzsteuer bleiben unberührt.',
         onAenderung: (w) => {
           entwurf.zahlungsstandZeigen = w !== 'aus';
           entwurf.zahlungsstandVerrechnen = w === 'verrechnen';

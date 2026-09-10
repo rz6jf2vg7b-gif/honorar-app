@@ -82,7 +82,7 @@ export function vertragsformular(o) {
     leeren(gruppenBox);
     v.kostenermittlung.gruppen.forEach((g, i) => {
       const betragF = feld({
-        label: `${g.nr} ${g.bezeichnung}`, art: 'zahl', wert: g.betrag ? zahlZeigen(g.betrag) : '',
+        label: `${g.nr} ${g.bezeichnung}`, art: 'geld', wert: g.betrag ? zahlZeigen(g.betrag) : '',
         einheit: '€ netto', platzhalter: '0,00',
         onEingabe: (w) => { g.betrag = w ?? 0; melden_(); },
       });
@@ -113,7 +113,7 @@ export function vertragsformular(o) {
   gruppenZeichnen();
 
   const mvbF = feld({
-    label: 'Mitzuverarbeitende Bausubstanz (§ 4 Abs. 3)', art: 'zahl', einheit: '€ netto',
+    label: 'Mitzuverarbeitende Bausubstanz (§ 4 Abs. 3)', art: 'geld', einheit: '€ netto',
     wert: v.kostenermittlung.mitzuverarbeitendeBausubstanz ? zahlZeigen(v.kostenermittlung.mitzuverarbeitendeBausubstanz) : '',
     hinweis: 'Nur ansetzen, wenn sie im Vertrag vereinbart ist.',
     onEingabe: (w) => { v.kostenermittlung.mitzuverarbeitendeBausubstanz = w ?? 0; melden_(); },
@@ -361,7 +361,7 @@ export function vertragsformular(o) {
           liste.append(el('div', { class: 'feldreihe' },
             feld({ wert: p.bezeichnung, platzhalter: 'Bezeichnung', onEingabe: (w) => { p.bezeichnung = w; melden_(); } }),
             feld({
-              art: 'zahl', einheit: '€', wert: p.betrag ? zahlZeigen(p.betrag) : '',
+              art: 'geld', einheit: '€', wert: p.betrag ? zahlZeigen(p.betrag) : '',
               onEingabe: (w) => { p.betrag = w ?? 0; melden_(); },
             }),
           ));

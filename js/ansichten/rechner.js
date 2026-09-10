@@ -217,7 +217,7 @@ export async function rechnerZeigen(wurzel) {
         feld({ label: 'KG', wert: g.nr, onEingabe: (w) => { g.nr = w; } }),
         feld({ label: 'Bezeichnung', wert: g.bezeichnung, onEingabe: (w) => { g.bezeichnung = w; } }),
         feld({
-          label: 'Betrag', art: 'zahl', einheit: '€', wert: zahlZeigen(g.betrag),
+          label: 'Betrag', art: 'geld', einheit: '€', wert: zahlZeigen(g.betrag),
           onEingabe: (w) => { g.betrag = w ?? 0; neuRechnen(); },
         }),
         feld({
@@ -273,7 +273,7 @@ export async function rechnerZeigen(wurzel) {
         }),
         feld({ label: 'Anlagengruppe', wert: g.bezeichnung, onEingabe: (w) => { g.bezeichnung = w; } }),
         feld({
-          label: 'Anrechenbare Kosten', art: 'zahl', einheit: '€', wert: zahlZeigen(g.kosten),
+          label: 'Anrechenbare Kosten', art: 'geld', einheit: '€', wert: zahlZeigen(g.kosten),
           onEingabe: (w) => { g.kosten = w ?? 0; neuRechnen(); },
         }),
         el('button', {

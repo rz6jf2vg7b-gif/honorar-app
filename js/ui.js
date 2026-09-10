@@ -82,6 +82,35 @@ export function feld(o) {
   } else if (o.art === 'mehrzeilig') {
     eingabe = el('textarea', { id, rows: o.zeilen || 3 });
     eingabe.value = o.wert ?? '';
+  } else if (o.art === 'geld') {
+    // Eingabe wie an der Kasse: Die Ziffern schieben von rechts herein, die
+    // letzten beiden sind Cent. 9 → 0,09 · 1 → 0,91 · 0 → 9,10 · 0 → 91,00.
+    //
+    // Warum nicht das normale Zahlenfeld? Weil dort jeder selbst entscheiden
+    // muss, wo das Komma hingehoert, und auf dem Telefon das Komma auf einer
+    // zweiten Tastaturebene liegt. Beim Erfassen vieler Betraege ist das die
+    // Stelle, an der Zahlendreher entstehen. Hier ist die Vorgabe 0,00 und jede
+    // Ziffer landet zwangslaeufig richtig.
+    //
+    // Umgesetzt ueber das `input`-Ereignis statt ueber Tastencodes: Nur so
+    // wirken auch Einfuegen, Ruecktaste und die Bildschirmtastatur des Telefons
+    // (die keine verwertbaren Tastencodes liefert). Die Ruecktaste schiebt die
+    // Ziffern wieder hinaus — 91,00 wird zu 9,10.
+    eingabe = el('input', {
+      id, type: 'text', inputmode: 'numeric', class: 'zahl', autocomplete: 'off',
+    });
+    const setzen = (cent) => { eingabe.value = FMT.format(cent / 100); };
+    setzen(Math.round(Math.abs(zahlLesen(String(o.wert ?? '')) || 0) * 100));
+    eingabe.addEventListener('input', () => {
+      setzen(centAusEingabe(eingabe.value));
+      // Der Cursor gehoert ans Ende — man schreibt hier nie in die Mitte.
+      const n = eingabe.value.length;
+      eingabe.setSelectionRange(n, n);
+    });
+    eingabe.addEventListener('focus', () => {
+      const n = eingabe.value.length;
+      requestAnimationFrame(() => eingabe.setSelectionRange(n, n));
+    });
   } else if (o.art === 'schalter') {
     eingabe = el('input', { id, type: 'checkbox' });
     eingabe.checked = !!o.wert;
@@ -157,11 +186,27 @@ export function feld(o) {
 
 function wertVon(eingabe, art) {
   if (art === 'schalter') return eingabe.checked;
-  if (art === 'zahl') return zahlLesen(eingabe.value);
+  if (art === 'zahl' || art === 'geld') return zahlLesen(eingabe.value);
   return eingabe.value;
 }
 
 /** "1.234,56" oder "1234.56" -> 1234.56 ; leer -> null */
+/**
+ * Die Kassenlogik als reine Funktion — damit sie pruefbar ist.
+ *
+ * Aus dem Rohtext des Feldes werden alle Ziffern genommen und als Cent gelesen.
+ * Das deckt Tippen, Einfuegen und die Ruecktaste in einem ab: Loescht der
+ * Browser aus "91,00" das letzte Zeichen, bleiben die Ziffern "9100" minus die
+ * letzte — also 910 Cent, 9,10 €. Die Ziffern schieben wieder hinaus.
+ *
+ * Begrenzt auf elf Stellen (999.999.999,99). Ein Architektenhonorar darueber
+ * gibt es nicht, und ohne Grenze liesse sich das Feld ins Unlesbare fuellen.
+ */
+export function centAusEingabe(rohtext) {
+  const ziffern = String(rohtext ?? '').replace(/\D/g, '').slice(0, 11);
+  return ziffern ? parseInt(ziffern, 10) : 0;
+}
+
 export function zahlLesen(text) {
   if (text === null || text === undefined) return null;
   let t = String(text).trim().replace(/\s|€|%/g, '');

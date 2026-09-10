@@ -10,8 +10,8 @@
 //     mit Hinweis geoeffnet. Das ist eine Grenze des Browsers, keine Bequemlichkeit.
 
 import {
-  el, leeren, melden, eurZeigen, feld, zahlLesen, isoNachDe, bestaetigen,
-  dateiSpeichern, dateiWaehlen, heuteIso,
+  el, leeren, melden, eurZeigen, feld, zahlLesen, zahlZeigen, isoNachDe,
+  bestaetigen, dateiSpeichern, dateiWaehlen, heuteIso,
 } from '../ui.js';
 import { SPEICHER, lesen, alle, einstellungenLesen, anschriftZeilen, telefonZeigen, personName } from '../db.js';
 import {
@@ -576,7 +576,7 @@ async function annahmeBlock(wurzel, beleg, neuZeichnen) {
       + 'Ein geänderter Betrag ersetzt den angebotenen.' }));
     for (const pos of eigene) {
       const an = feld({ label: '', art: 'schalter', wert: true, schaltertext: pos.bezeichnung });
-      const betrag = feld({ label: 'Betrag', art: 'zahl', einheit: '€', wert: String(pos.betrag ?? '') });
+      const betrag = feld({ label: 'Betrag', art: 'geld', einheit: '€', wert: String(pos.betrag ?? '') });
       positionsFelder.push({ pos, an, betrag });
       aenderungen.append(el('div', { class: 'feldreihe' }, an, betrag));
     }
@@ -590,7 +590,7 @@ async function annahmeBlock(wurzel, beleg, neuZeichnen) {
     class: 'knopf leise',
     onclick: () => {
       const bez = feld({ label: 'Zusätzlich beauftragt', wert: '' });
-      const bet = feld({ label: 'Betrag', art: 'zahl', einheit: '€', wert: '' });
+      const bet = feld({ label: 'Betrag', art: 'geld', einheit: '€', wert: '' });
       zusatz.push({ bez, bet });
       zusatzKasten.append(el('div', { class: 'feldreihe' }, bez, bet));
     },
@@ -658,28 +658,32 @@ async function zahlungsBlock(wurzel, beleg, neuZeichnen) {
   }
 
   if (Math.abs(offen) > 0.005) {
-    const datumF = feld({ label: 'Eingang am', art: 'date', wert: heuteIso() });
-    const betragF = feld({ label: 'Teilbetrag', art: 'zahl', einheit: '€', wert: '' });
+    // Der Zahlbetrag ist mit dem offenen Betrag vorbelegt: Der Regelfall ist,
+    // dass alles kommt — dann genuegt ein Druck. Kommt weniger, wird die Zahl
+    // ueberschrieben. Zwei Knoepfe fuer "voll" und "teilweise" waren eine
+    // Unterscheidung, die es an der Kasse nicht gibt.
+    const datumF = feld({ label: 'Zahlungseingang am', art: 'date', wert: heuteIso() });
+    const betragF = feld({
+      label: 'Zahlbetrag', art: 'geld', einheit: '€', wert: zahlZeigen(Math.abs(offen)),
+      hinweis: 'Weicht der Betrag ab, bleibt die Differenz offen und fließt in den '
+        + 'Zahlbetrag der nächsten Rechnung dieses Projekts ein.',
+    });
     karte.append(el('div', { class: 'feldreihe' }, datumF, betragF),
       el('div', { class: 'knopfreihe' },
         el('button', {
           class: 'knopf',
           onclick: async () => {
-            await zahlungErfassen(beleg.id, offen, datumF.eingabe.value || heuteIso());
-            melden('Vollständig bezahlt.');
-            neuZeichnen();
-          },
-        }, `Bezahlt (${eurZeigen(offen)})`),
-        el('button', {
-          class: 'knopf zweit',
-          onclick: async () => {
             const b = zahlLesen(betragF.eingabe.value);
-            if (!b) { melden('Teilbetrag fehlt.', 'fehler'); return; }
+            if (!b) { melden('Zahlbetrag fehlt.', 'fehler'); return; }
             await zahlungErfassen(beleg.id, b, datumF.eingabe.value || heuteIso());
-            melden('Teilzahlung erfasst.');
+            const rest = Math.round((offen - b) * 100) / 100;
+            melden(Math.abs(rest) < 0.005
+              ? 'Vollständig bezahlt.'
+              : `Erfasst. Offen bleiben ${eurZeigen(rest)} — sie werden auf der nächsten `
+                + 'Rechnung dieses Projekts ausgewiesen.');
             neuZeichnen();
           },
-        }, 'Teilbetrag erfassen')));
+        }, 'Zahlung erfassen')));
   } else {
     karte.append(el('p', { class: 'klein', text: 'Vollständig bezahlt.' }));
   }

@@ -186,7 +186,7 @@ export async function einstellungenZeigen(wurzel) {
       p('vorgaben.umbauzuschlag', 'Umbauzuschlag')),
     el('div', { class: 'feldreihe' },
       (f['vorgaben.stundensatz'] = feld({
-        label: 'Stundensatz', art: 'zahl', einheit: '€', wert: zahlZeigen(e.vorgaben.stundensatz),
+        label: 'Stundensatz', art: 'geld', einheit: '€', wert: zahlZeigen(e.vorgaben.stundensatz),
       })),
       (f['vorgaben.zahlungsziel'] = feld({
         label: 'Zahlungsziel', art: 'zahl', einheit: 'Tage', wert: String(e.vorgaben.zahlungsziel),
