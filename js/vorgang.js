@@ -37,6 +37,80 @@ export const IST_RECHNUNG = (art) => ['AR', 'TS', 'SR', 'ER'].includes(art);
 
 export const STATUS = { ENTWURF: 'entwurf', FEST: 'fest', STORNIERT: 'storniert' };
 
+/** Belegarten, die ein Angebot sind — sie werden angenommen, nicht bezahlt. */
+export const IST_ANGEBOT = (art) => ['AN', 'NA'].includes(art);
+
+/**
+ * Wie der Bauherr auf ein Angebot geantwortet hat.
+ *
+ * Der praktisch wichtigste Fall ist GEAENDERT: Der Bauherr streicht
+ * Leistungsphasen oder Positionen und unterschreibt. Das ist nach
+ * § 150 Abs. 2 BGB keine Annahme, sondern eine Ablehnung verbunden mit einem
+ * neuen Antrag — angenommen wird er dadurch, dass beide weiterarbeiten. Fuer
+ * die Abrechnung zaehlt deshalb nicht, was angeboten war, sondern was
+ * tatsaechlich beauftragt wurde. Genau das haelt die Annahme fest.
+ */
+export const ANNAHME = {
+  VOLL: 'voll',           // wie angeboten
+  GEAENDERT: 'geaendert', // mit Streichungen, Ergaenzungen oder anderem Betrag
+  ABGELEHNT: 'abgelehnt',
+};
+
+/**
+ * Verwaltungsdaten eines Belegs aendern — auch wenn er festgeschrieben ist.
+ *
+ * Die GoBD verlangt, dass der *Rechnungsinhalt* nach dem Festschreiben
+ * unveraenderlich ist: Betraege, Leistungen, Nummer, Datum. Wann die Rechnung
+ * zur Post ging und wann sie bezahlt wurde, gehoert nicht dazu — das entsteht
+ * erst danach und muss nachtragbar sein, sonst waere die App im Alltag
+ * unbrauchbar. Die Weissliste zieht diese Grenze und macht sie pruefbar:
+ * Alles, was hier nicht steht, laesst sich an einem festen Beleg nicht aendern.
+ */
+const VERWALTUNGSFELDER = new Set([
+  'gestelltAm',      // wann versandt
+  'zahlungszielTage',
+  'annahme',         // {am, art, bemerkung, positionen, phasen}
+  'bezugBelegId',    // Rechnung -> Angebot/Nachtrag
+  'zahlungen', 'gezahlt',
+  'notiz',
+]);
+
+export async function verwaltungsdatenSetzen(belegId, felder) {
+  const b = await lesen(SPEICHER.BELEGE, belegId);
+  if (!b) throw new Error('Beleg nicht gefunden.');
+  const fremd = Object.keys(felder).filter((k) => !VERWALTUNGSFELDER.has(k));
+  if (fremd.length) {
+    throw new Error(`Am festgeschriebenen Beleg nicht änderbar: ${fremd.join(', ')}. `
+      + 'Der Rechnungsinhalt bleibt, wie er gestellt wurde (GoBD).');
+  }
+  const satz = { ...b, ...felder };
+  await schreiben(SPEICHER.BELEGE, satz);
+  return satz;
+}
+
+/** Versand vermerken. Das Datum ist frei — nachgetragen wird oefter als gleich. */
+export const belegGestellt = (belegId, datum) =>
+  verwaltungsdatenSetzen(belegId, { gestelltAm: datum || heute() });
+
+/**
+ * Faelligkeit einer Rechnung. Gerechnet ab Versand, nicht ab Belegdatum: Eine
+ * Rechnung, die zwei Wochen liegen blieb, ist nicht zwei Wochen frueher faellig.
+ * Ohne Versanddatum bleibt das Belegdatum die einzige Grundlage.
+ */
+export function faelligAm(beleg, zahlungszielVorgabe = 30) {
+  const ab = beleg.gestelltAm || beleg.datum;
+  if (!ab) return null;
+  const tage = Number.isFinite(beleg.zahlungszielTage) ? beleg.zahlungszielTage : zahlungszielVorgabe;
+  // In UTC rechnen, nicht in Ortszeit: `new Date('2026-09-01T00:00:00')` ist
+  // Mitternacht MESZ, und toISOString() zieht davon zwei Stunden ab — das Datum
+  // faellt einen Tag zurueck. Derselbe Fallstrick wie in der Zeiterfassung.
+  const [j, m, t] = ab.split('-').map(Number);
+  const d = new Date(Date.UTC(j, m - 1, t + tage));
+  return d.toISOString().slice(0, 10);
+}
+
+const heute = () => new Date().toISOString().slice(0, 10);
+
 // ————————————————————————————————————————————————————————————————
 // Nummernvergabe
 // ————————————————————————————————————————————————————————————————
@@ -103,14 +177,21 @@ export async function aktuellerVertrag(projektId) {
  */
 export async function vertragAnlegen({ projektId, daten, grund, gueltigAb }) {
   const bisher = await vertraegeZuProjekt(projektId);
+  // Die Ordnungsfelder stehen NACH den Daten, nicht davor.
+  //
+  // Sonst bringt ein aus dem Vorgaenger uebernommener Entwurf dessen `id` und
+  // `version` mit — und der neue Vertragsstand ueberschreibt beim Speichern den
+  // alten. Der urspruengliche Auftrag waere weg, die Historie dahinter auch, und
+  // jeder Beleg mit dieser vertragId zeigte plötzlich auf den geaenderten Stand.
+  // Gefunden am 10.09.2026 beim Bau der Teilbeauftragung.
   const vertrag = {
+    ...daten,
     id: neueId('v'),
     projektId,
     version: bisher.length + 1,
     grund: grund || (bisher.length ? 'Nachtrag' : 'Auftrag'),
     gueltigAb: gueltigAb || new Date().toISOString().slice(0, 10),
     angelegt: new Date().toISOString(),
-    ...daten,
   };
   await schreiben(SPEICHER.VERTRAEGE, vertrag);
   return vertrag;
@@ -119,6 +200,13 @@ export async function vertragAnlegen({ projektId, daten, grund, gueltigAb }) {
 // ————————————————————————————————————————————————————————————————
 // Rechnen
 // ————————————————————————————————————————————————————————————————
+
+/** Alle Belege eines Projekts, juengste zuerst — ohne Grabsteine. */
+export async function belegeZuProjekt(projektId) {
+  const belege = await alle(SPEICHER.BELEGE);
+  return belege.filter((b) => b.projektId === projektId)
+    .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+}
 
 /** Hat der Beleg einen tragfaehigen Vertragsstand, oder steht er fuer sich? */
 export const ohneVertrag = (entwurf) =>
@@ -177,6 +265,13 @@ const eurText = (z) => new Intl.NumberFormat('de-DE',
 
 /** Vertragsdaten in die Form bringen, die honorarermittlung() erwartet. */
 export function ermittlungAusVertrag(vertrag, leistungsstand = null) {
+  // Ohne Kostenermittlung gibt es keine anrechenbaren Kosten und damit kein
+  // Honorar nach HOAI. Ohne diese Pruefung kam aus dem Rechenkern ein
+  // "Cannot read properties of undefined", mit dem niemand etwas anfangen kann.
+  if (!vertrag?.kostenermittlung && !vertrag?.flaecheHektar && !vertrag?.verrechnungseinheiten) {
+    throw new Error('Dem Vertragsstand fehlt die Kostenermittlung. '
+      + 'Ohne anrechenbare Kosten lässt sich das Honorar nicht ermitteln.');
+  }
   const phasen = (vertrag.phasen || []).map((p) => ({
     nr: p.nr,
     vereinbart: p.vereinbart,
@@ -337,6 +432,74 @@ export async function belegFestschreiben(beleg, vertrag) {
   return satz;
 }
 
+/**
+ * Die Antwort des Bauherrn auf ein Angebot oder einen Nachtrag festhalten.
+ *
+ * Was hier entsteht, ist der Massstab fuer alles Weitere: Abschlags- und
+ * Schlussrechnungen rechnen gegen den *beauftragten* Umfang, nicht gegen den
+ * angebotenen. Deshalb zieht eine Annahme mit Aenderungen einen eigenen
+ * Vertragsstand nach sich — das Angebot selbst bleibt unangetastet, es ist ein
+ * festgeschriebener Beleg.
+ *
+ * @param {string} belegId
+ * @param {object} a
+ * @param {string} a.am          Datum der Annahme (frei, wird oft nachgetragen)
+ * @param {string} a.art         ANNAHME.VOLL | GEAENDERT | ABGELEHNT
+ * @param {string} [a.bemerkung] z. B. "LPh 5-9 zurückgestellt"
+ * @param {Array}  [a.positionen] beauftragte Positionen (Pauschale/Zeit)
+ * @param {Array}  [a.phasen]     beauftragte Leistungsphasen [{nr, vereinbart}]
+ */
+export async function annahmeVermerken(belegId, a) {
+  const beleg = await lesen(SPEICHER.BELEGE, belegId);
+  if (!beleg) throw new Error('Beleg nicht gefunden.');
+  if (!IST_ANGEBOT(beleg.art)) {
+    throw new Error('Nur Angebote und Nachträge werden angenommen. '
+      + 'Eine Rechnung wird bezahlt.');
+  }
+  const art = a.art || ANNAHME.VOLL;
+  const am = a.am || heute();
+
+  const annahme = {
+    am, art,
+    bemerkung: a.bemerkung || '',
+    positionen: art === ANNAHME.GEAENDERT ? (a.positionen || null) : null,
+    phasen: art === ANNAHME.GEAENDERT ? (a.phasen || null) : null,
+    vermerktAm: new Date().toISOString(),
+  };
+  const satz = await verwaltungsdatenSetzen(belegId, { annahme });
+
+  if (art === ANNAHME.ABGELEHNT) return { beleg: satz, vertrag: null };
+
+  // Der Vertragsstand: bei unveraenderter Annahme wird der vorhandene wirksam,
+  // bei Aenderungen entsteht ein neuer mit dem tatsaechlich beauftragten Umfang.
+  const vorhanden = beleg.vertragId ? await lesen(SPEICHER.VERTRAEGE, beleg.vertragId) : null;
+  let vertrag = null;
+
+  if (art === ANNAHME.VOLL && vorhanden) {
+    vertrag = { ...vorhanden, beauftragt: true, beauftragtAm: am };
+    await schreiben(SPEICHER.VERTRAEGE, vertrag);
+  } else if (art === ANNAHME.GEAENDERT && vorhanden && (a.phasen || []).length) {
+    vertrag = await vertragAnlegen({
+      projektId: beleg.projektId,
+      daten: { ...vorhanden, phasen: a.phasen, beauftragt: true, beauftragtAm: am },
+      grund: `Auftrag nach ${BELEGART_TEXT[beleg.art]} ${beleg.nummer}, geändert`,
+      gueltigAb: am,
+    });
+  }
+  return { beleg: satz, vertrag };
+}
+
+/**
+ * Was aus einem angenommenen Angebot tatsaechlich geschuldet ist.
+ * Ohne Aenderungen ist das der Angebotsinhalt, sonst der der Annahme.
+ */
+export function beauftragtePositionen(beleg) {
+  if (beleg?.annahme?.art === ANNAHME.GEAENDERT && beleg.annahme.positionen) {
+    return beleg.annahme.positionen;
+  }
+  return beleg?.positionen || [];
+}
+
 /** Storno: hebt einen festgeschriebenen Beleg auf, ohne ihn zu loeschen. */
 export async function belegStornieren(beleg, grund) {
   if (beleg.status !== STATUS.FEST) throw new Error('Nur festgeschriebene Belege werden storniert.');
@@ -369,6 +532,52 @@ export async function zahlungErfassen(belegId, betrag, datum) {
   const gezahlt = runde2(zahlungen.reduce((s, z) => s + z.betrag, 0));
   await schreiben(SPEICHER.BELEGE, { ...b, zahlungen, gezahlt });
   return gezahlt;
+}
+
+// ————————————————————————————————————————————————————————————————
+// Anlagen — das unterschriebene Original
+// ————————————————————————————————————————————————————————————————
+//
+// Das gegengezeichnete Angebot ist im Streitfall das wichtigste Blatt der Akte:
+// Es beweist, was vereinbart wurde. Es gehoert deshalb an den Beleg und nicht in
+// einen Ordner daneben, wo es beim naechsten Aufraeumen verlorengeht.
+//
+// Datenschutz: Die Datei liegt in der Datenbank des Geraets. Sie wird beim
+// Abgleich NICHT in die gemeinsame Datei geschrieben — ein Scan wiegt Megabyte
+// und haette honorar.json unbrauchbar gross gemacht. Der Abgleich legt Anlagen
+// stattdessen einzeln in OneDrive ab (js/sync/anlagen.js).
+
+/** Groesste Datei, die sinnvoll in der Datenbank liegt. Darueber wird gewarnt. */
+export const ANLAGE_GRENZE = 20 * 1024 * 1024;
+
+export async function anlageSpeichern(belegId, datei) {
+  if (!datei) throw new Error('Keine Datei gewählt.');
+  if (datei.size > ANLAGE_GRENZE) {
+    throw new Error(`Die Datei ist ${(datei.size / 1024 / 1024).toFixed(1)} MB groß. `
+      + `Mehr als ${ANLAGE_GRENZE / 1024 / 1024} MB je Anlage nimmt die App nicht an — `
+      + 'scanne das Blatt in geringerer Auflösung oder als PDF.');
+  }
+  const anlage = {
+    id: neueId('a'),
+    belegId,
+    name: datei.name || 'Anlage',
+    typ: datei.type || 'application/octet-stream',
+    groesse: datei.size,
+    daten: await datei.arrayBuffer(),
+    angelegt: new Date().toISOString(),
+  };
+  await schreiben(SPEICHER.ANLAGEN, anlage);
+  return anlage;
+}
+
+export async function anlagenZuBeleg(belegId) {
+  const a = await alle(SPEICHER.ANLAGEN);
+  return a.filter((x) => x.belegId === belegId)
+    .sort((x, y) => (x.angelegt || '').localeCompare(y.angelegt || ''));
+}
+
+export async function anlageLesen(id) {
+  return lesen(SPEICHER.ANLAGEN, id);
 }
 
 export { ART_BEZEICHNUNG };

@@ -291,6 +291,26 @@ export function dateiLaden(endungen = '.json') {
   });
 }
 
+/**
+ * Datei vom Nutzer waehlen — als Datei, nicht als Text.
+ *
+ * Gegenstueck zu dateiLaden(): Ein eingescanntes Angebot ist ein PDF oder ein
+ * Foto, kein Text. `capture` fehlt bewusst — auf dem Telefon soll die Wahl
+ * zwischen Kamera und Dateien beim Nutzer bleiben.
+ */
+export function dateiWaehlen(endungen = 'application/pdf,image/*') {
+  return new Promise((res) => {
+    const inp = el('input', { type: 'file', accept: endungen, style: 'display:none' });
+    inp.addEventListener('change', () => {
+      const d = inp.files?.[0] || null;
+      inp.remove();
+      res(d);
+    });
+    document.body.append(inp);
+    inp.click();
+  });
+}
+
 /** Symbole der Navigation — schlichte Strichzeichnungen. */
 export const SYMBOL = {
   // Dashboard: liegende Balken — dasselbe Bild wie die Balken auf der Seite

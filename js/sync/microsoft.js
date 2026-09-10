@@ -228,7 +228,9 @@ export function abmelden() {
  * JSON gesendet. Ein 404 ist kein Fehler, sondern die uebliche Antwort beim
  * ersten Mal — die Datei gibt es noch nicht.
  */
-export async function graph(pfad, { methode = 'GET', koerper = null, roh = null, kopf = {} } = {}) {
+export async function graph(pfad, {
+  methode = 'GET', koerper = null, roh = null, kopf = {}, binaer = false,
+} = {}) {
   const token = await gueltigerToken();
   const res = await fetch(pfad.startsWith('http') ? pfad : GRAPH + pfad, {
     method: methode,
@@ -241,6 +243,12 @@ export async function graph(pfad, { methode = 'GET', koerper = null, roh = null,
   });
   if (res.status === 204) return null;
   if (res.status === 404) return { _nichtGefunden: true };
+  // Dateiinhalte sind kein JSON. Ohne diesen Zweig scheiterte das Holen einer
+  // Anlage an JSON.parse — mit einer Meldung, die nach kaputter Datei aussieht.
+  if (binaer) {
+    if (!res.ok) throw new Error(`Graph antwortete ${res.status}`);
+    return res.arrayBuffer();
+  }
   const text = await res.text();
   const daten = text ? JSON.parse(text) : null;
   if (!res.ok) throw new Error(daten?.error?.message || `Graph antwortete ${res.status}`);

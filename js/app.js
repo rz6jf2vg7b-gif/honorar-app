@@ -77,7 +77,13 @@ async function leiten() {
       await dashboardZeigen(inhalt);
     } else if (weg === 'neu') {
       const { assistentZeigen } = await import('./ansichten/assistent.js');
-      await assistentZeigen(inhalt, wert ? { projektId: wert } : {});
+      // "#neu/<projekt>?aus=<beleg>" — aus einem angenommenen Angebot heraus.
+      const [projektId, anhang] = (wert || '').split('?');
+      const ausBelegId = new URLSearchParams(anhang || '').get('aus');
+      await assistentZeigen(inhalt, {
+        ...(projektId ? { projektId } : {}),
+        ...(ausBelegId ? { ausBelegId } : {}),
+      });
     } else if (weg === 'beleg') {
       const { belegAnsehen } = await import('./ansichten/belegansicht.js');
       await belegAnsehen(inhalt, wert);

@@ -12,12 +12,15 @@ import {
   el, feld, leeren, melden, suchauswahl, eurZeigen, zahlLesen, zahlZeigen,
   heuteIso, isoNachDe, bestaetigen,
 } from '../ui.js';
-import { SPEICHER, alle, schreiben, neueId, einstellungenLesen, kontaktSuchtext, projektSuchtext, personName } from '../db.js';
 import {
-  BELEGART, BELEGART_TEXT, IST_RECHNUNG,
+  SPEICHER, alle, lesen, schreiben, neueId, einstellungenLesen,
+  kontaktSuchtext, projektSuchtext, personName,
+} from '../db.js';
+import {
+  BELEGART, BELEGART_TEXT, IST_RECHNUNG, IST_ANGEBOT, STATUS,
   nummerVorschlagen, nummerFrei, aktuellerVertrag, vertraegeZuProjekt,
   vertragAnlegen, belegRechnen, belegSpeichern, belegFestschreiben,
-  ermittlungAusVertrag,
+  ermittlungAusVertrag, belegeZuProjekt, beauftragtePositionen,
 } from '../vorgang.js';
 import { LEISTUNGSBILDER } from '../hoai/leistungsbilder.js';
 import { vertragsformular } from './vertragsformular.js';
@@ -45,6 +48,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     einbehaltText: '',
     leistungszeitraum: '',
     leistungsdatum: '',
+    bezugBelegId: null,
     anrede: '',
     anschreiben: '',
     // Angebot und Nachtrag
@@ -52,6 +56,28 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     grundleistungenZeigen: true,
     leistungsstand: {},
   };
+
+  // Aus einem angenommenen Angebot heraus gestartet: Empfaenger, Grundlage und
+  // die tatsaechlich beauftragten Positionen stehen dann schon fest. Genau das
+  // war bisher die laestigste Stelle — man hatte die Zahlen zweimal zu tippen,
+  // und beim zweiten Mal standen andere drin als im Auftrag.
+  let ausPositionsauftrag = false;
+  if (vorgabe.ausBelegId) {
+    const quelle = await lesen(SPEICHER.BELEGE, vorgabe.ausBelegId);
+    if (quelle) {
+      entwurf.projektId = quelle.projektId;
+      entwurf.adresseId = quelle.adresseId;
+      entwurf.bezugBelegId = quelle.id;
+      entwurf.ustSatz = quelle.ustSatz ?? entwurf.ustSatz;
+      const positionen = beauftragtePositionen(quelle);
+      if (positionen.length) {
+        ausPositionsauftrag = true;
+        entwurf.honorarart = 'positionen';
+        entwurf.positionen = JSON.parse(JSON.stringify(positionen));
+      }
+      if (quelle.vertragId) entwurf.vertragId = quelle.vertragId;
+    }
+  }
 
   let vertragEntwurf = null;      // Vertragsdaten, solange nicht gespeichert
   let vertragBestand = null;      // vorhandener Vertrag aus der Datenbank
@@ -61,7 +87,15 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
   // Belegarten, bei denen die Art des Honorars offen ist. Abschlags-,
   // Teilschluss- und Schlussrechnung rechnen kumulativ gegen den Vertragsstand
   // — dort ist die HOAI-Ermittlung nicht wählbar, sondern zwingend.
-  const HONORARART_WAEHLBAR = [BELEGART.ANGEBOT, BELEGART.NACHTRAG, BELEGART.EINZEL];
+  // Auch Abschlags-, Teilschluss- und Schlussrechnungen duerfen ueber freie
+  // Positionen laufen: Ein Pauschalhonorar wird in der Praxis in Abschlaegen
+  // abgerechnet ("40 % nach Vorentwurf"), und dazu gibt es keinen HOAI-Vertrag,
+  // gegen den sich rechnen liesse. Der kumulative Abzug der Vorrechnungen
+  // funktioniert unabhaengig davon, woher die Betraege kommen.
+  const HONORARART_WAEHLBAR = [
+    BELEGART.ANGEBOT, BELEGART.NACHTRAG, BELEGART.EINZEL,
+    BELEGART.ABSCHLAG, BELEGART.TEILSCHLUSS, BELEGART.SCHLUSS,
+  ];
 
   const schritte = () => {
     const s = ['art', 'projekt', 'empfaenger'];
@@ -144,8 +178,12 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
         onclick: () => {
           entwurf.art = art;
           entwurf.kumulativ = art !== BELEGART.EINZEL;
-          // Einzelrechnungen stehen für sich, alles andere folgt zunächst der HOAI.
-          entwurf.honorarart = art === BELEGART.EINZEL ? 'positionen' : 'hoai';
+          // Einzelrechnungen stehen für sich, alles andere folgt zunächst der
+          // HOAI. Kommt der Beleg aus einem Auftrag über freie Positionen, bleibt
+          // es dabei — sonst müsste man die Pauschale erneut eintippen, obwohl
+          // sie beauftragt danebenliegt.
+          entwurf.honorarart = (art === BELEGART.EINZEL || ausPositionsauftrag)
+            ? 'positionen' : 'hoai';
           schritt++; zeichnen();
         },
       },
@@ -665,11 +703,15 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       onEingabe: (w) => { entwurf.anschreiben = w; },
     });
 
-    box.append(
-      el('div', { class: 'feldreihe' }, nummerF, datumF),
-      el('div', { class: 'feldreihe' }, zeitraumF, leistungsdatumF),
-      ustF, anredeF, textF,
-    );
+    box.append(el('div', { class: 'feldreihe' }, nummerF, datumF));
+    // Leistungszeitraum und Leistungsdatum sind Rechnungsangaben: § 14 UStG gilt
+    // fuer Rechnungen, und BT-72 der E-Rechnung gibt es nur dort. Auf einem
+    // Angebot ist die Leistung noch nicht erbracht — danach zu fragen verwirrt
+    // und die Begruendung waere schlicht falsch.
+    if (IST_RECHNUNG(entwurf.art)) {
+      box.append(el('div', { class: 'feldreihe' }, zeitraumF, leistungsdatumF));
+    }
+    box.append(ustF, anredeF, textF);
 
     // ── Angebot und Nachtrag ───────────────────────────
     // Ohne Annahmefrist gilt § 147 Abs. 2 BGB: das Angebot erlischt, sobald die
@@ -700,7 +742,37 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
         onAenderung: (w) => { entwurf.grundleistungenZeigen = w === 'ja'; },
       });
 
-      box.append(el('h2', { text: istNachtrag ? 'Nachtrag' : 'Angebot' }), bindeF, glF);
+      box.append(el('h2', { text: istNachtrag ? 'Nachtrag' : 'Angebot' }), bindeF);
+      // Nur bei einer Ermittlung nach HOAI: Eine Pauschale hat keine
+      // Leistungsphasen, deren Wortlaut sich abdrucken liesse -- der Schalter
+      // lief dort ins Leere.
+      if (entwurf.honorarart !== 'positionen') box.append(glF);
+    }
+
+    // ── Bezug auf Angebot oder Nachtrag ────────────────
+    // Der Bauherr soll die Rechnung gegen das prüfen können, was er beauftragt
+    // hat. Steht die Angebotsnummer nicht darauf, sucht er sie heraus — oder er
+    // fragt nach, und die Zahlung verzögert sich.
+    if (IST_RECHNUNG(entwurf.art) && entwurf.projektId) {
+      const grundlagen = (await belegeZuProjekt(entwurf.projektId))
+        .filter((b) => IST_ANGEBOT(b.art) && b.status === STATUS.FEST
+          && b.annahme?.art !== 'abgelehnt')
+        .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+      if (grundlagen.length) {
+        const bezugF = feld({
+          label: 'Grundlage der Rechnung', art: 'auswahl',
+          wert: entwurf.bezugBelegId || '',
+          optionen: [{ wert: '', text: 'ohne Bezug' }, ...grundlagen.map((b) => ({
+            wert: b.id,
+            text: `${BELEGART_TEXT[b.art]} ${b.nummer} vom ${isoNachDe(b.datum)}`
+              + (b.annahme ? ` · ${b.annahme.art === 'geaendert' ? 'mit Änderungen angenommen' : 'angenommen'}` : ' · noch offen'),
+          }))],
+          hinweis: 'Erscheint auf dem Beleg als Verweis. Ein noch nicht angenommenes '
+            + 'Angebot ist keine tragfähige Grundlage für eine Rechnung.',
+          onAenderung: (w) => { entwurf.bezugBelegId = w || null; },
+        });
+        box.append(el('h2', { text: 'Grundlage' }), bezugF);
+      }
     }
 
     if (IST_RECHNUNG(entwurf.art)) {

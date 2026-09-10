@@ -11,7 +11,10 @@
 // spaeter durch Nachtraege weitergezogen wurde.
 
 const DB_NAME = 'honorarapp';
-const DB_VERSION = 1;
+// v2 (10.09.2026): Speicher `anlagen` fuer eingescannte Originale — das vom
+// Bauherrn unterschriebene Angebot, der gegengezeichnete Nachtrag. Der Aufstieg
+// legt nur den neuen Speicher an und ruehrt die vorhandenen nicht an.
+const DB_VERSION = 2;
 
 export const SPEICHER = {
   EINSTELLUNGEN: 'einstellungen',
@@ -19,6 +22,7 @@ export const SPEICHER = {
   ADRESSEN: 'adressen',
   VERTRAEGE: 'vertraege',
   BELEGE: 'belege',
+  ANLAGEN: 'anlagen',
 };
 
 let dbP = null;
@@ -49,6 +53,12 @@ function oeffnen() {
         s.createIndex('projektId', 'projektId');
         s.createIndex('nummer', 'nummer');
         s.createIndex('datum', 'datum');
+      }
+      // Anlagen liegen bewusst in einem eigenen Speicher, nicht im Beleg: Ein
+      // Scan wiegt Megabyte, und der Beleg wird bei jeder Ansicht gelesen.
+      if (!db.objectStoreNames.contains(SPEICHER.ANLAGEN)) {
+        const s = db.createObjectStore(SPEICHER.ANLAGEN, { keyPath: 'id' });
+        s.createIndex('belegId', 'belegId');
       }
     };
     anf.onsuccess = () => res(anf.result);

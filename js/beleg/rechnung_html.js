@@ -21,6 +21,19 @@ import { eur, prozent } from '../hoai/geld.js';
 import { cdVervollstaendigen, cdAlsCssVariablen, CD_KREATIVLABOR42 } from './cd.js';
 import { angebotsblaetter } from './angebot.js';
 
+/**
+ * Ueberschrift des Leistungsblocks auf Seite 1.
+ *
+ * "Grundlagen des Honorars" passt nur, wo nach HOAI hergeleitet wird. Bei freien
+ * Positionen sagt sie nichts — dort heisst es "Angebotene Leistungen" auf einem
+ * Angebot und "Abgerechnete Leistungen" auf einer Rechnung. Ein Angebot rechnet
+ * nichts ab, und eine Rechnung bietet nichts an.
+ */
+function ueberschriftLeistungen(d, ermittlungen) {
+  if (!ermittlungen.every((e) => e.ausPositionen)) return 'Grundlagen des Honorars';
+  return ['AN', 'NA'].includes(d.belegart) ? 'Angebotene Leistungen' : 'Abgerechnete Leistungen';
+}
+
 const h = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -267,7 +280,7 @@ export function rechnungHtml(d) {
     ${d.anrede ? `<p>${h(d.anrede)}</p>` : ''}
     ${d.anschreiben ? `<p>${h(d.anschreiben)}</p>` : ''}
 
-    <h2>${ermittlungen.every((e) => e.ausPositionen) ? 'Angebotene Leistungen' : 'Grundlagen des Honorars'}</h2>
+    <h2>${ueberschriftLeistungen(d, ermittlungen)}</h2>
     ${grundlagen}
 
     <div class="betrag">

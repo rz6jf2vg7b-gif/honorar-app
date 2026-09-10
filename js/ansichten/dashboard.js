@@ -12,10 +12,12 @@
 
 import { el, leeren, eurZeigen, isoNachDe, feld } from '../ui.js';
 import { SPEICHER, alle, einstellungenLesen } from '../db.js';
-import { BELEGART, BELEGART_TEXT, IST_RECHNUNG, STATUS, ermittlungAusVertrag } from '../vorgang.js';
+import {
+  BELEGART, BELEGART_TEXT, IST_RECHNUNG, IST_ANGEBOT, STATUS,
+  ermittlungAusVertrag, faelligAm,
+} from '../vorgang.js';
 import { runde2, prozent } from '../hoai/geld.js';
 
-const TAG = 86400000;
 
 export async function dashboardZeigen(wurzel) {
   const [belege, projekte, vertraege, adressen, einst] = await Promise.all([
@@ -90,11 +92,22 @@ export async function dashboardZeigen(wurzel) {
     .filter((x) => Math.abs(x.offen) > 0.005);
   const offen = runde2(offeneListe.reduce((s, x) => s + x.offen, 0));
 
-  // Ueberfaellig: aelter als 30 Tage. Ein eigenes Zahlungsziel je Beleg gibt es
-  // noch nicht — sobald es das tut, gehoert es hierher.
-  const ueberfaellig = offeneListe.filter((x) =>
-    x.b.datum && (heute - new Date(x.b.datum).getTime()) > 30 * TAG);
+  // Ueberfaellig heisst: das Zahlungsziel ist verstrichen — gerechnet ab Versand,
+  // nicht ab Belegdatum. Eine Rechnung, die zwei Wochen liegen blieb, ist nicht
+  // zwei Wochen frueher faellig. Fehlt das Versanddatum, bleibt das Belegdatum.
+  const zielTage = Number.isFinite(einst?.vorgaben?.zahlungsziel)
+    ? einst.vorgaben.zahlungsziel : 30;
+  const ueberfaellig = offeneListe.filter((x) => {
+    const f = faelligAm(x.b, zielTage);
+    return f && heute > new Date(`${f}T23:59:59`).getTime();
+  });
   const summeUeberfaellig = runde2(ueberfaellig.reduce((s, x) => s + x.offen, 0));
+
+  // Angebote, die draussen sind und auf Antwort warten. Sie sind der Vorlauf des
+  // Geschaefts — ohne sie sieht das Dashboard nur zurueck.
+  const offeneAngebote = belege.filter((b) => IST_ANGEBOT(b.art)
+    && b.status === STATUS.FEST && !b.annahme);
+  const summeAngebote = runde2(offeneAngebote.reduce((s, b) => s + (b.brutto || 0), 0));
 
   const bezahltJahr = runde2(rechnungen
     .filter((b) => (b.datum || '').startsWith(String(jahr)))
@@ -103,8 +116,10 @@ export async function dashboardZeigen(wurzel) {
   wurzel.append(el('div', { class: 'kennzahlen' },
     kachel('Offen', eurZeigen(offen), `${offeneListe.length} Rechnung(en)`),
     kachel('Überfällig', eurZeigen(summeUeberfaellig),
-      ueberfaellig.length ? `${ueberfaellig.length} älter als 30 Tage` : 'nichts überfällig',
+      ueberfaellig.length ? `${ueberfaellig.length} über dem Zahlungsziel` : 'nichts überfällig',
       summeUeberfaellig > 0 ? 'warnung' : ''),
+    kachel('Angebote offen', eurZeigen(summeAngebote),
+      offeneAngebote.length ? `${offeneAngebote.length} ohne Antwort` : 'keine offen'),
     kachel(`Eingegangen ${jahr}`, eurZeigen(bezahltJahr), `${rechnungen.length} Rechnungen gestellt`),
   ));
 
@@ -194,13 +209,13 @@ export async function dashboardZeigen(wurzel) {
   const box = el('div');
   const suchF = feld({
     label: 'Suchen', art: 'search', platzhalter: 'Nummer, Projekt …',
-    onEingabe: (w) => zeichnenBelege(box, stand, belege, projekte, w),
+    onEingabe: (w) => zeichnenBelege(box, stand, belege, projekte, w, zielTage),
   });
-  zeichnenBelege(box, stand, belege, projekte, '');
+  zeichnenBelege(box, stand, belege, projekte, '', zielTage);
   wurzel.append(suchF, box);
 }
 
-function zeichnenBelege(box, stand, alleBelege, projekte, suche) {
+function zeichnenBelege(box, stand, alleBelege, projekte, suche, zielTage = 30) {
   leeren(box);
   const s = (suche || '').trim().toLowerCase();
   const passt = (b) => {
@@ -216,7 +231,7 @@ function zeichnenBelege(box, stand, alleBelege, projekte, suche) {
     gezeigt += treffer.length;
     box.append(
       el('h3', { text: `${gruppe.projekt.nummer} ${gruppe.projekt.name}` }),
-      el('ul', { class: 'liste' }, ...treffer.map((b) => belegZeile(b))),
+      el('ul', { class: 'liste' }, ...treffer.map((b) => belegZeile(b, zielTage))),
     );
   }
   // Belege ohne Projektzuordnung
@@ -224,22 +239,53 @@ function zeichnenBelege(box, stand, alleBelege, projekte, suche) {
   if (ohne.length) {
     gezeigt += ohne.length;
     box.append(el('h3', { text: 'Ohne Projektzuordnung' }),
-      el('ul', { class: 'liste' }, ...ohne.map((b) => belegZeile(b))));
+      el('ul', { class: 'liste' }, ...ohne.map((b) => belegZeile(b, zielTage))));
   }
   if (!gezeigt) box.append(el('div', { class: 'leer' }, el('p', { text: 'Kein Treffer.' })));
 }
 
-function belegZeile(b) {
+/**
+ * Wo der Beleg gerade steht. Die Liste ist das, was man morgens ansieht — sie
+ * muss ohne Antippen sagen, was zu tun ist: Angebot noch nicht raus, Antwort
+ * steht aus, Rechnung ueberfaellig.
+ */
+function belegZustand(b, zielTage = 30) {
+  if (b.status === STATUS.ENTWURF) return 'Entwurf';
+  if (b.status === STATUS.STORNIERT) return 'storniert';
+
+  if (IST_ANGEBOT(b.art)) {
+    if (b.annahme?.art === 'abgelehnt') return 'abgelehnt';
+    if (b.annahme?.art === 'geaendert') return `beauftragt am ${isoNachDe(b.annahme.am)}, mit Änderungen`;
+    if (b.annahme) return `beauftragt am ${isoNachDe(b.annahme.am)}`;
+    if (!b.gestelltAm) return 'noch nicht versandt';
+    if (b.bindefrist && b.bindefrist < new Date().toISOString().slice(0, 10)) {
+      return `Bindefrist abgelaufen (${isoNachDe(b.bindefrist)})`;
+    }
+    return 'wartet auf Antwort';
+  }
+
   const offen = runde2((b.brutto || 0) - (b.gezahlt || 0));
-  const zustand = b.status === STATUS.ENTWURF ? 'Entwurf'
-    : b.status === STATUS.STORNIERT ? 'storniert'
-      : (IST_RECHNUNG(b.art) && Math.abs(offen) < 0.005 ? 'bezahlt' : null);
+  if (Math.abs(offen) < 0.005) return 'bezahlt';
+  if (!b.gestelltAm) return 'noch nicht versandt';
+  const f = faelligAm(b, zielTage);
+  if (f && Date.now() > new Date(`${f}T23:59:59`).getTime()) {
+    const tage = Math.floor((Date.now() - new Date(`${f}T00:00:00`).getTime()) / 86400000);
+    return `überfällig seit ${tage} Tag${tage === 1 ? '' : 'en'}`;
+  }
+  return f ? `fällig am ${isoNachDe(f)}` : null;
+}
+
+function belegZeile(b, zielTage = 30) {
+  const zustand = belegZustand(b, zielTage);
   return el('li', {}, el('button', {
     class: 'eintrag', type: 'button', onclick: () => { location.hash = `#beleg/${b.id}`; },
   },
     el('div', { class: 'haupt' },
       el('div', { class: 'titel', text: `${BELEGART_TEXT[b.art] || 'Beleg'} ${b.nummer}` }),
-      el('div', { class: 'neben', text: [b.datumDe || isoNachDe(b.datum), zustand].filter(Boolean).join(' · ') }),
+      el('div', {
+        class: /überfällig|abgelaufen/.test(zustand || '') ? 'neben warnung' : 'neben',
+        text: [b.datumDe || isoNachDe(b.datum), zustand].filter(Boolean).join(' · '),
+      }),
     ),
     el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? b.zahlbetrag ?? 0) }),
   ));

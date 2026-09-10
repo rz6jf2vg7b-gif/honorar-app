@@ -75,8 +75,15 @@ export function belegeVerschmelzen(lokal, fern) {
           text: `Der festgeschriebene Beleg ${l.nummer} liegt in zwei Fassungen vor. `
             + 'Der Stand dieses Geräts bleibt unverändert.',
         });
+        continue;                     // der Inhalt weicht ab: eigener Stand bleibt
       }
-      continue;                       // in beiden Faellen bleibt der eigene Stand
+      // Gleicher Inhalt, aber der Vorgang laeuft weiter: Versand, Annahme,
+      // Zahlungen entstehen NACH dem Festschreiben und muessen ueber die Geraete
+      // wandern. Wuerde hier immer der eigene Stand gewinnen, bliebe ein am iPad
+      // vermerkter Zahlungseingang am Mac fuer immer unsichtbar.
+      const z = verwaltungZusammen(l, f);
+      if (z) { nachId.set(f.id, z); aktualisiert += 1; }
+      continue;
     }
     if (istFest(l)) continue;         // fest schlaegt Entwurf
     if (istFest(f)) { nachId.set(f.id, f); aktualisiert += 1; continue; }
@@ -86,6 +93,42 @@ export function belegeVerschmelzen(lokal, fern) {
   }
 
   return { liste: [...nachId.values()], neu, aktualisiert, konflikte };
+}
+
+/**
+ * Verwaltungsdaten zweier inhaltsgleicher fester Belege zusammenfuehren.
+ *
+ * Der juengere Stand gewinnt als Ganzes — nicht feldweise, sonst entstuende eine
+ * Mischung, die es auf keinem Geraet je gab. Nur die Zahlungen werden vereinigt:
+ * Zwei Geraete koennen verschiedene Eingaenge erfasst haben, und ein verlorener
+ * Zahlungseingang faellt erst beim Mahnen auf.
+ *
+ * @returns {object|null} der neue Stand, oder null wenn nichts zu aendern ist
+ */
+export function verwaltungZusammen(lokal, fern) {
+  const zahlungen = zahlungenVereinen(lokal.zahlungen, fern.zahlungen);
+  const gezahlt = Math.round(zahlungen.reduce((s, z) => s + (z.betrag || 0), 0) * 100) / 100;
+  const basis = juenger(lokal, fern);
+  const neu = { ...basis, zahlungen, gezahlt };
+
+  // Ein Vermerk, den nur die andere Seite hat, geht sonst verloren, wenn dieses
+  // Geraet zufaellig den juengeren Zeitstempel traegt.
+  for (const feld of ['gestelltAm', 'annahme', 'bezugBelegId', 'zahlungszielTage']) {
+    if (neu[feld] == null) neu[feld] = lokal[feld] ?? fern[feld] ?? null;
+  }
+  return JSON.stringify(neu) === JSON.stringify(lokal) ? null : neu;
+}
+
+function zahlungenVereinen(a = [], b = []) {
+  const gesehen = new Set();
+  const raus = [];
+  for (const z of [...(a || []), ...(b || [])]) {
+    const schluessel = `${z.datum}|${z.betrag}`;
+    if (gesehen.has(schluessel)) continue;
+    gesehen.add(schluessel);
+    raus.push(z);
+  }
+  return raus.sort((x, y) => (x.datum || '').localeCompare(y.datum || ''));
 }
 
 /** Dieselbe Belegnummer an zwei verschiedenen Belegen. */
@@ -106,6 +149,24 @@ export function nummernkonflikte(belege) {
       text: `Die Belegnummer ${nummer} ist ${liste.length}-mal vergeben — vermutlich `
         + 'auf zwei Geräten ohne Netz entstanden. Eine davon muss umbenannt werden.',
     }));
+}
+
+/**
+ * Kurzname des Geraets fuer den Stand in OneDrive.
+ *
+ * Vorher stand hier der vollstaendige Browser-Kennstring. Er sagt fuer den
+ * Zweck — "von welchem Geraet kam das?" — nicht mehr als "Mac", schleppt aber
+ * Fassungsnummern von Betriebssystem und Browser in eine Datei, die dort nichts
+ * zu suchen haben.
+ */
+function geraeteName() {
+  const u = navigator.userAgent || '';
+  if (/iPad/.test(u)) return 'iPad';
+  if (/iPhone/.test(u)) return 'iPhone';
+  if (/Android/.test(u)) return 'Android';
+  if (/Macintosh|Mac OS/.test(u)) return 'Mac';
+  if (/Windows/.test(u)) return 'Windows';
+  return 'unbekannt';
 }
 
 // ————————————————————————————————————————————————————————————————
@@ -160,16 +221,33 @@ export async function abgleichen() {
 
   const konflikte = [...b.konflikte, ...nummernkonflikte(b.liste)];
 
+  // Anlagen: eigene Dateien, nur ihr Verzeichnis wandert im Stand mit. Ein
+  // Fehlschlag hier darf den Abgleich nicht umwerfen — die Belege sind dann
+  // laengst abgeglichen, und ein fehlender Scan ist kein Grund, alles zu
+  // verwerfen. Er wird gemeldet und beim naechsten Lauf erneut versucht.
+  let anlagenStand = { hoch: 0, runter: 0, fehler: [] };
+  let anlagenVerzeichnis = fern?.anlagen || [];
+  try {
+    const { anlagenAbgleichen, verzeichnisAus } = await import('./anlagen.js');
+    anlagenStand = await anlagenAbgleichen(fern?.anlagen || []);
+    anlagenVerzeichnis = verzeichnisAus(await alle(SPEICHER.ANLAGEN));
+  } catch (f) {
+    anlagenStand.fehler.push(f.message);
+  }
+
   await onedrive.speichern({
     art: 'honorarapp-abgleich',
     format: FORMAT,
     geschriebenAm: new Date().toISOString(),
-    geraet: navigator.userAgent.slice(0, 80),
+    // Nur die Geraeteklasse, nicht der vollstaendige Browser-Kennstring: Fuer
+    // "welches Geraet war das?" genuegt Mac oder iPhone.
+    geraet: geraeteName(),
     einstellungen,
     projekte: p.liste,
     adressen: a.liste,
     vertraege: v.liste,
     belege: b.liste,
+    anlagen: anlagenVerzeichnis,
   });
 
   const jetzt = new Date().toISOString();
@@ -179,6 +257,7 @@ export async function abgleichen() {
   );
 
   return {
+    anlagen: anlagenStand,
     erster: !fern,
     hereingekommen: p.neu + a.neu + v.neu + b.neu,
     aktualisiert: p.aktualisiert + a.aktualisiert + v.aktualisiert + b.aktualisiert,

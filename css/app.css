@@ -662,3 +662,28 @@ input.zahl.schmal { max-width: 76px; min-height: 34px; padding: 4px 8px; }
   padding: 18px 20px; background: var(--paper); color: var(--ink-soft);
   max-height: 62vh; overflow-y: auto; margin: 6px 0 0;
 }
+
+/* ── Abschnittskopf mit Schließkreuz ───────────────────────────────────────
+   Das Kreuz sitzt auf der Höhe der Überschrift, nicht darüber: Es gehört zu
+   dem Abschnitt, den es schließt. */
+.abschnittkopf { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.abschnittkopf h2 { flex: 1 1 auto; }
+.kreuz {
+  flex: 0 0 auto; width: 2rem; height: 2rem; line-height: 1;
+  display: grid; place-items: center;
+  font-size: 1.4rem; color: var(--grey-2);
+  background: none; border: 0; border-radius: var(--r); cursor: pointer;
+}
+.kreuz:hover { color: var(--ink); background: var(--flaeche); }
+
+/* Ein Zustand, der Handlung verlangt — überfällige Rechnung, abgelaufene
+   Bindefrist. Nur die Zeile darunter färbt sich, nicht der ganze Eintrag: Die
+   Liste soll ruhig bleiben und trotzdem zeigen, wo es brennt. */
+.neben.warnung { color: var(--warn); }
+
+/* `hidden` muss stärker sein als jede display-Regel.
+   Der Browser bringt `[hidden]{display:none}` mit, aber `.knopf{display:inline-flex}`
+   ist spezifischer und schlägt es — ein verstecktes Element blieb sichtbar.
+   Gefunden am 10.09.2026 an den beiden Vorschau-Knöpfen, die gleichzeitig
+   dastanden. */
+[hidden] { display: none !important; }
