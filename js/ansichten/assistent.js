@@ -25,6 +25,7 @@ import {
 import { LEISTUNGSBILDER } from '../hoai/leistungsbilder.js';
 import { vertragsformular } from './vertragsformular.js';
 import { prozent } from '../hoai/geld.js';
+import { zahlungsplanRechnen, VORLAGEN } from '../beleg/zahlungsplan.js';
 
 export async function assistentZeigen(wurzel, vorgabe = {}) {
   const einst = await einstellungenLesen();
@@ -62,6 +63,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     // Angebot und Nachtrag
     bindefrist: '',
     grundleistungenZeigen: true,
+    zahlungsplan: { raten: [] },
     leistungsstand: {},
   };
 
@@ -374,6 +376,81 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     box.append(abweichend, weiterLeiste('Weiter', null, !!entwurf.adresseId));
     const k = box.querySelector('.knopfreihe.fest button.akzent');
     if (k) k.disabled = !entwurf.adresseId;
+  }
+
+  /**
+   * Der Zahlungsplan: beliebig viele Raten, frei benannt.
+   *
+   * Prozentsatz ODER fester Betrag — wer eine Zahl eintraegt, meint sie. Der
+   * Ausloeser ist Text und kein Datum, weil "nach Genehmigungsplanung" die
+   * ehrlichere Faelligkeit ist als ein Kalendertag, den beim Bauen niemand
+   * halten kann.
+   */
+  function zahlungsplanFormular() {
+    const kasten = el('div');
+    if (!entwurf.zahlungsplan) entwurf.zahlungsplan = { raten: [] };
+
+    const zeichnenPlan = () => {
+      leeren(kasten);
+      const raten = entwurf.zahlungsplan.raten;
+
+      kasten.append(el('h2', { text: 'Zahlungsplan' }),
+        el('p', { class: 'unterzeile', text: 'Optional. Ist er gefüllt, bekommt das Angebot '
+          + 'ein eigenes Blatt mit Balken, Tabelle und Feld zur Freigabe.' }));
+
+      if (!raten.length) {
+        kasten.append(el('div', { class: 'knopfreihe' }, ...VORLAGEN.map((v) => el('button', {
+          class: 'knopf leise', type: 'button',
+          onclick: () => {
+            entwurf.zahlungsplan.raten = JSON.parse(JSON.stringify(v.raten));
+            zeichnenPlan();
+          },
+        }, v.name))));
+      }
+
+      raten.forEach((r, i) => {
+        const bez = feld({ label: `${i + 1}. Rate`, wert: r.bezeichnung || '',
+          onEingabe: (w) => { r.bezeichnung = w; } });
+        const proz = feld({ label: 'Anteil', art: 'zahl', einheit: '%',
+          wert: r.prozent ? zahlZeigen(r.prozent * 100) : '',
+          onEingabe: (w) => { r.prozent = (w ?? 0) / 100; r.betrag = null; aktualisieren(); } });
+        const betr = feld({ label: 'oder fester Betrag', art: 'geld', einheit: '€ netto',
+          wert: r.betrag ? zahlZeigen(r.betrag) : '',
+          onEingabe: (w) => { r.betrag = w || null; aktualisieren(); } });
+        const ausl = feld({ label: 'Fällig', wert: r.ausloeser || '',
+          platzhalter: 'z. B. nach Genehmigungsplanung',
+          onEingabe: (w) => { r.ausloeser = w; } });
+        kasten.append(el('div', { class: 'karte' },
+          bez, el('div', { class: 'feldreihe' }, proz, betr), ausl,
+          el('div', { class: 'knopfreihe' }, el('button', {
+            class: 'knopf leise', type: 'button',
+            onclick: () => { raten.splice(i, 1); zeichnenPlan(); },
+          }, 'Rate entfernen'))));
+      });
+
+      const stand = el('p', { class: 'klein' });
+      const aktualisieren = () => {
+        const summe = rechnenStill(vertragDaten())?.netto
+          ?? (entwurf.positionen || []).reduce((s, p) => s + (p.betrag || 0), 0);
+        const g = zahlungsplanRechnen(entwurf.zahlungsplan, summe, entwurf.ustSatz);
+        stand.textContent = raten.length
+          ? `${prozent(g.summeProzent)} des Honorars verteilt` + (g.hinweise.length ? ` — ${g.hinweise[0]}` : '')
+          : '';
+        stand.className = g.vollstaendig || !raten.length ? 'klein' : 'hinweis warnung';
+      };
+      aktualisieren();
+
+      kasten.append(stand, el('div', { class: 'knopfreihe' }, el('button', {
+        class: 'knopf leise', type: 'button',
+        onclick: () => { raten.push({ bezeichnung: `${raten.length + 1}. Rate` }); zeichnenPlan(); },
+      }, 'Rate hinzufügen'), raten.length ? el('button', {
+        class: 'knopf leise', type: 'button',
+        onclick: () => { entwurf.zahlungsplan.raten = []; zeichnenPlan(); },
+      }, 'Plan verwerfen') : null));
+    };
+
+    zeichnenPlan();
+    return kasten;
   }
 
   function adresseAnlegen(vorschlag, danach) {
@@ -794,6 +871,7 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       });
 
       box.append(el('h2', { text: istNachtrag ? 'Nachtrag' : 'Angebot' }), bindeF);
+      box.append(zahlungsplanFormular());
       // Nur bei einer Ermittlung nach HOAI: Eine Pauschale hat keine
       // Leistungsphasen, deren Wortlaut sich abdrucken liesse -- der Schalter
       // lief dort ins Leere.

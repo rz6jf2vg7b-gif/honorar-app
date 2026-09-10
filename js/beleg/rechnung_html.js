@@ -107,6 +107,34 @@ function bausteinHtml(b) {
         </div>`).join('')}
       </div></div>`;
   }
+  // Der Zahlungsplan als Balken: ein Streifen ueber die volle Breite, in
+  // Segmente geteilt. Der Bauherr sieht in einem Blick, wie sich das Honorar
+  // verteilt — eine Tabelle allein muss man erst zusammenrechnen.
+  //
+  // Bewusst reines HTML statt SVG: Der Druckdialog des Browsers rendert Flexbox
+  // zuverlaessig, und die Beschriftung bleibt echter Text (durchsuchbar, und
+  // beim Vergroessern nicht verpixelt).
+  if (b.art === 'balken') {
+    const gesamt = b.segmente.reduce((s, x) => s + (x.anteil || 0), 0) || 1;
+    return `<div class="block planbalken">
+      ${b.titel ? `<h3>${h(b.titel)}</h3>` : ''}
+      <div class="balkenreihe">
+        ${b.segmente.map((seg, i) => `
+        <div class="segment ${i % 2 ? 'zweit' : ''}" style="flex:${(seg.anteil || 0) / gesamt}">
+          <span class="segwert">${h(seg.wert)}</span>
+        </div>`).join('')}
+      </div>
+      <div class="balkenreihe legende">
+        ${b.segmente.map((seg) => `
+        <div class="segment" style="flex:${(seg.anteil || 0) / gesamt}">
+          <span class="segbez">${h(seg.bezeichnung)}</span>
+          ${seg.neben ? `<span class="segneben">${h(seg.neben)}</span>` : ''}
+        </div>`).join('')}
+      </div>
+      ${b.fuss ? `<p class="balkenfuss">${h(b.fuss)}</p>` : ''}
+    </div>`;
+  }
+
   if (b.art === 'tabelle') {
     const numAb = b.spalten.length - (b.spalten.length > 4 ? 4 : 1);
     const cls = (i) => (i >= numAb && i > 0 ? ' class="num"' : '');
@@ -434,6 +462,11 @@ export function rechnungHtml(d) {
     // Ein Unterschriftsblock wird nie zerrissen: eine Unterschriftslinie ohne
     // die Erklaerung darueber ist wertlos.
     if (b.art === 'unterschrift') return 34;
+    if (b.art === 'balken') {
+      // Balken, Legende und Fusszeile: fest, weil die Hoehe nicht vom Inhalt
+      // abhaengt. Nie zerreissen — ein halber Balken sagt nichts.
+      return (b.titel ? 6 : 0) + 26 + (b.fuss ? 6 : 0);
+    }
     if (b.art === 'tabelle') {
       const kopf = (b.titel ? 6 : 0) + 5;
       const zeilen = b.zeilen.reduce((s, z) =>
@@ -668,6 +701,20 @@ dl.gl{ margin:0; }
 dl.gl div{ display:flex; gap:3mm; padding:.35mm 0; align-items:baseline; }
 dl.gl dt{ flex:0 0 5mm; font-family:var(--mono); color:var(--accent); }
 dl.gl dd{ margin:0; flex:1 1 auto; }
+
+/* ── Zahlungsplan: Balken ─────────────────────────────── */
+.planbalken{ break-inside:avoid; }
+.balkenreihe{ display:flex; width:100%; gap:.6mm; }
+.balkenreihe .segment{ min-width:0; }
+.balkenreihe:not(.legende) .segment{ background:var(--accent); color:#fff;
+  padding:2.2mm 1.5mm; text-align:center; overflow:hidden; }
+.balkenreihe:not(.legende) .segment.zweit{ background:var(--ink-soft); }
+.segwert{ font:600 var(--pt-text)/1 var(--schrift); white-space:nowrap; }
+.legende{ margin-top:1.5mm; align-items:start; }
+.legende .segment{ padding-right:1.5mm; }
+.segbez{ display:block; font-size:var(--pt-folgeseite); color:var(--ink); }
+.segneben{ display:block; font:var(--pt-mono-klein)/1.4 var(--mono); color:var(--grey-2); }
+.balkenfuss{ margin:3mm 0 0; color:var(--grey-2); }
 
 /* ── Unterschriften ───────────────────────────────────── */
 .unterschriften{ display:flex; gap:12mm; margin-top:4mm; }

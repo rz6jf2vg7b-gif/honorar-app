@@ -111,6 +111,7 @@ export async function belegAnsehen(wurzel, belegId) {
       : { nummer: '—', name: '—' },
     abrechnung,
     ermittlungen: [ermittlung],
+    zahlungsplan: beleg.zahlungsplan || null,
     cd: cdAus(einst),
     leistungszeitraum: beleg.leistungszeitraum,
     kickerRechts: vertrag ? `HOAI ${vertrag.fassung}` : '',
@@ -193,6 +194,12 @@ export async function belegAnsehen(wurzel, belegId) {
   wurzel.append(el('h2', { text: 'Ausgabe' }),
     el('div', { class: 'knopfreihe' },
       el('button', { class: 'knopf akzent', onclick: () => drucken(html()) }, 'Drucken / PDF'),
+      // Der Zahlungsplan geht oft allein raus — als Anlage, die unterschrieben
+      // zurueckkommt, oder zur Abstimmung mit der Bank des Bauherrn.
+      (beleg.zahlungsplan?.raten || []).length ? el('button', {
+        class: 'knopf zweit',
+        onclick: () => drucken(nurZahlungsplan(html())),
+      }, 'Nur Zahlungsplan') : null,
       el('button', {
         class: 'knopf zweit',
         onclick: () => sichern(beleg, projekt, adresse, einst.vorgaben.ablageschema, html()),
@@ -786,4 +793,22 @@ async function anlagenBlock(wurzel, beleg, neuZeichnen) {
   }, IST_ANGEBOT(beleg.art) ? 'Unterschriebenes Original ablegen' : 'Datei ablegen')));
 
   wurzel.append(el('h2', { text: 'Anlagen' }), karte);
+}
+
+/**
+ * Aus dem fertigen Beleg nur das Zahlungsplan-Blatt herausloesen.
+ *
+ * Der Umweg ueber das gerenderte Dokument ist Absicht: So ist sicher, dass das
+ * einzeln gedruckte Blatt Zeichen fuer Zeichen dasselbe ist wie das im Angebot.
+ * Ein zweiter Renderer waere ein zweiter Ort, an dem sich etwas aendern kann.
+ */
+function nurZahlungsplan(html) {
+  const kopf = html.slice(0, html.indexOf('<body>') + 6);
+  const seiten = html.match(/<section class="seite[\s\S]*?<\/section>/g) || [];
+  const plan = seiten.filter((s) => /planbalken/.test(s));
+  if (!plan.length) return html;
+  // Die Seitenzahlen des Angebots passen hier nicht mehr — sie werden entfernt,
+  // damit auf dem einzelnen Blatt nicht "05 / 07" steht.
+  const ohneZahl = plan.map((s) => s.replace(/<div class="seitenzahl">[\s\S]*?<\/div>/, ''));
+  return `${kopf}\n${ohneZahl.join('\n')}\n</body></html>`;
 }

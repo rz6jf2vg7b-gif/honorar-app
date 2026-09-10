@@ -22,6 +22,7 @@
 import { eur, prozent } from '../hoai/geld.js';
 import { LEISTUNGSBILDER, ZONE_ROEMISCH } from '../hoai/leistungsbilder.js';
 import { GRUNDLEISTUNGEN } from '../hoai/grundleistungen.js';
+import { zahlungsplanRechnen } from './zahlungsplan.js';
 
 /** Belegarten, die diese Blaetter tragen. */
 export const BRAUCHT_ANGEBOTSBLAETTER = (art) => ['AN', 'NA'].includes(art);
@@ -53,12 +54,87 @@ export function angebotsblaetter(d) {
     if (g.length) blaetter.push({ titel: 'Änderung gegenüber dem bisherigen Vertragsstand', bausteine: g });
   }
 
+  // Der Zahlungsplan steht vor der Annahmeerklaerung: Der Bauherr soll ihn
+  // gelesen haben, bevor er unterschreibt. Er ist ein eigenes Blatt und laesst
+  // sich auch allein drucken — als Anlage zum Angebot, die zurueckkommt.
+  const plan = zahlungsplanblatt(d);
+  if (plan.length) blaetter.push({ titel: 'Zahlungsplan', bausteine: plan });
+
   blaetter.push({
     titel: d.belegart === 'NA' ? 'Nachtragsvereinbarung' : 'Annahme des Angebots',
     bausteine: annahmeerklaerung(d),
   });
 
   return blaetter;
+}
+
+/**
+ * Das Zahlungsplan-Blatt: Balken, Tabelle, Freigabe.
+ *
+ * Die Reihenfolge ist Absicht. Zuerst der Balken — er beantwortet die Frage,
+ * die der Bauherr wirklich hat ("wann kommt wieviel?"), ohne dass er rechnen
+ * muss. Dann die Tabelle mit den genauen Betraegen und der kumulierten Spalte:
+ * Sie ist das, was im Streitfall gilt. Zuletzt das Unterschriftsfeld.
+ */
+export function zahlungsplanblatt(d) {
+  const p = d.zahlungsplan;
+  if (!p || !(p.raten || []).length) return [];
+
+  // Bezugsgroesse ist das Nettohonorar dieses Angebots.
+  const summe = d.abrechnung?.rechnungsbetragNetto
+    ?? d.ermittlungen?.reduce((s, e) => s + (e.netto || 0), 0)
+    ?? 0;
+  const ustSatz = d.abrechnung?.ustSatz || 0;
+  const gerechnet = zahlungsplanRechnen(p, summe, ustSatz);
+  if (!gerechnet.raten.length) return [];
+
+  const bausteine = [];
+
+  bausteine.push({
+    art: 'balken',
+    titel: 'Verteilung des Honorars',
+    segmente: gerechnet.raten.map((r) => ({
+      anteil: r.netto,
+      wert: prozent(r.prozent),
+      bezeichnung: r.bezeichnung,
+      neben: r.ausloeser || (r.datum ? deDatum(r.datum) : ''),
+    })),
+    fuss: 'Die Breite entspricht dem Anteil am Honorar.',
+  });
+
+  bausteine.push(tabelle('Die Raten im Einzelnen',
+    ['Rate', 'Fällig', 'Anteil', 'Netto', 'Brutto', 'kumuliert'],
+    gerechnet.raten.map((r) => [
+      r.bezeichnung,
+      r.ausloeser || (r.datum ? deDatum(r.datum) : '—'),
+      prozent(r.prozent),
+      eur(r.netto),
+      eur(r.brutto),
+      prozent(r.kumuliertProzent),
+    ]),
+    ['Summe', '', prozent(gerechnet.summeProzent), eur(gerechnet.summeNetto),
+      eur(gerechnet.summeBrutto), ''],
+    gerechnet.hinweise.length ? gerechnet.hinweise : null));
+
+  // Die rechtliche Einordnung gehoert auf das Blatt: Ein Zahlungsplan ist eine
+  // Vereinbarung ueber Abschlagszahlungen, kein Verzicht auf die Schlussrechnung.
+  bausteine.push(hinweis(
+    'Die Raten sind Abschlagszahlungen auf das vereinbarte Honorar. Sie werden mit '
+    + 'dem Erreichen des jeweiligen Leistungsstands fällig und mit der Schlussrechnung '
+    + 'abgerechnet; Überzahlungen werden erstattet.',
+    '§ 15 Abs. 2 HOAI, § 632a BGB',
+  ));
+
+  bausteine.push({
+    art: 'unterschrift',
+    titel: 'Zahlungsplan freigegeben',
+    felder: [
+      { rolle: 'Auftraggeber', name: d.empfaenger?.name || '' },
+      { rolle: 'Auftragnehmer', name: d.buero?.name || '' },
+    ],
+  });
+
+  return bausteine;
 }
 
 // ————————————————————————————————————————————————————————————————
