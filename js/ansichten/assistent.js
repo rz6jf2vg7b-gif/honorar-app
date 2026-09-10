@@ -1064,7 +1064,31 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       if (!vertrag && entwurf.honorarart !== 'positionen') vertrag = leererVertrag();
 
       entwurf.vertragId = vertrag?.id || null;
-      let beleg = await belegSpeichern({ ...entwurf });
+
+      // Die gerechneten Summen wandern schon in den Entwurf.
+      //
+      // Ohne sie stand in der Belegliste und im Dashboard "0,00 €" bei jedem
+      // Entwurf — brutto und zahlbetrag entstanden erst beim Festschreiben. Ein
+      // Entwurf hat aber sehr wohl einen Betrag; er ist nur noch nicht endgültig.
+      // Beim Festschreiben werden die Werte ohnehin neu gerechnet und
+      // überschrieben (gefunden am 11.09.2026 an Steffens erstem Angebot).
+      let summen = {};
+      try {
+        const { abrechnung } = await belegRechnen({ ...entwurf }, vertrag);
+        summen = {
+          summeNetto: abrechnung.rechnungsbetragNetto,
+          ust: abrechnung.ust,
+          brutto: abrechnung.brutto,
+          zahlbetrag: abrechnung.zahlbetrag,
+        };
+      } catch { /* unvollstaendiger Entwurf — dann eben ohne Summen */ }
+
+      let beleg = await belegSpeichern({ ...entwurf, ...summen });
+      // Die Kennung zurueckschreiben: Sonst legt ein zweites "Als Entwurf
+      // sichern" einen weiteren Beleg an, weil entwurf.id null geblieben ist.
+      // Genau so entstand am 11.09.2026 dasselbe Angebot zweimal.
+      entwurf.id = beleg.id;
+
       if (festschreiben) beleg = await belegFestschreiben(beleg, vertrag);
 
       melden(festschreiben ? 'Beleg festgeschrieben.' : 'Als Entwurf gesichert.');

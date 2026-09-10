@@ -14,7 +14,7 @@ import { el, leeren, anfuegen, eurZeigen, isoNachDe, feld } from '../ui.js';
 import { SPEICHER, alle, einstellungenLesen } from '../db.js';
 import {
   BELEGART, BELEGART_TEXT, IST_RECHNUNG, IST_ANGEBOT, STATUS,
-  ermittlungAusVertrag, faelligAm,
+  ermittlungAusVertrag, faelligAm, belegBrutto,
 } from '../vorgang.js';
 import { runde2, prozent } from '../hoai/geld.js';
 
@@ -294,9 +294,11 @@ function belegZeile(b, zielTage = 30) {
         text: [b.datumDe || isoNachDe(b.datum), zustand].filter(Boolean).join(' · '),
       }),
     ),
-    el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? b.zahlbetrag ?? 0) }),
+    el('div', { class: 'betrag', text: eurZeigen(belegBrutto(b)) }),
   ));
 }
+
+
 
 /** Abschnittstrenner: Linie, Überschrift, optional eine Anzahl rechts. */
 function abschnitt(titel, anzahl = null) {

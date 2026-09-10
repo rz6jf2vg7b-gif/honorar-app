@@ -9,7 +9,7 @@
 //      abgelegt. Nur so bleibt er reproduzierbar, wenn der Vertrag spaeter
 //      durch Nachtraege weitergezogen wird.
 
-import { SPEICHER, alle, lesen, schreiben, neueId } from './db.js';
+import { SPEICHER, alle, lesen, schreiben, loeschen, neueId } from './db.js';
 import { honorarermittlung } from './hoai/rechnen.js';
 import { erstelleAbrechnung, ART_BEZEICHNUNG } from './hoai/abrechnung.js';
 import { runde2 } from './hoai/geld.js';
@@ -203,6 +203,27 @@ export async function vertragAnlegen({ projektId, daten, grund, gueltigAb }) {
 // ————————————————————————————————————————————————————————————————
 // Rechnen
 // ————————————————————————————————————————————————————————————————
+
+/**
+ * Der Bruttobetrag eines Belegs fuer Listen.
+ *
+ * Festgeschriebene Belege tragen ihn. Entwuerfe aus der Zeit vor dem 11.09.2026
+ * nicht — dort entstanden die Summen erst beim Festschreiben, und in jeder Liste
+ * stand "0,00 €". Fuer sie wird aus den Positionen gerechnet.
+ *
+ * Ein HOAI-Entwurf ohne gespeicherte Summe bleibt ohne Betrag (null): Ihn hier
+ * nachzurechnen hiesse, Vertragsstand und Honorartafeln zu laden — fuer eine
+ * Listenzeile zu viel. Und eine falsche Zahl waere schlimmer als keine.
+ */
+export function belegBrutto(b) {
+  if (Number.isFinite(b?.brutto)) return b.brutto;
+  if (Number.isFinite(b?.zahlbetrag)) return b.zahlbetrag;
+  const posten = b?.positionen || [];
+  if (!posten.length) return null;
+  const netto = posten.reduce((s, p) => s
+    + (p.art === 'zeit' ? (p.stunden || 0) * (p.satz || 0) : (p.betrag || 0)), 0);
+  return runde2(netto * (1 + (b.ustSatz || 0)));
+}
 
 /** Alle Belege eines Projekts, juengste zuerst — ohne Grabsteine. */
 export async function belegeZuProjekt(projektId) {
@@ -486,6 +507,20 @@ export async function belegSpeichern(beleg) {
     throw new Error('Dieser Beleg ist festgeschrieben und kann nicht mehr geändert werden. '
       + 'Erzeuge stattdessen eine Stornorechnung.');
   }
+  // Die Belegnummer muss einmalig sein (§ 14 Abs. 4 Nr. 4 UStG) — und zwei
+  // Belege mit derselben Nummer sind auch praktisch ein Problem: In der Liste
+  // sind sie nicht auseinanderzuhalten. Am 11.09.2026 lag ein Angebot deshalb
+  // zweimal im Bestand. Die Ursache war eine andere (die Kennung wurde nach dem
+  // Sichern nicht zurueckgeschrieben), aber der Riegel gehoert hierher: Der
+  // Assistent prueft nur beim Weiterklicken, gespeichert wird auch anderswo.
+  if (beleg.nummer) {
+    const belegt = (await alle(SPEICHER.BELEGE))
+      .find((b) => b.nummer === beleg.nummer && b.id !== beleg.id);
+    if (belegt) {
+      throw new Error(`Die Belegnummer ${beleg.nummer} ist bereits vergeben. `
+        + 'Jede Nummer darf nur einmal vorkommen (§ 14 Abs. 4 Nr. 4 UStG).');
+    }
+  }
   const satz = {
     ...beleg,
     id: beleg.id || neueId('b'),
@@ -598,6 +633,30 @@ export function beauftragtePositionen(beleg) {
     return beleg.annahme.positionen;
   }
   return beleg?.positionen || [];
+}
+
+/**
+ * Einen Entwurf loeschen.
+ *
+ * Nur Entwuerfe: Ein festgeschriebener Beleg wird storniert, nicht entfernt —
+ * eine Rechnung, die es gab, verschwindet nicht aus der Buchhaltung. Ein
+ * Entwurf dagegen ist nie nach draussen gegangen; ihn behalten zu muessen,
+ * waere Ordnungswahn, und in der Belegliste stuende auf Dauer Ausschuss.
+ *
+ * Geloescht wird als Grabstein (siehe db.js), damit der Abgleich die Loeschung
+ * auf die anderen Geraete traegt, statt den Beleg von dort zurueckzuholen.
+ */
+export async function belegLoeschen(belegId) {
+  const b = await lesen(SPEICHER.BELEGE, belegId);
+  if (!b) throw new Error('Beleg nicht gefunden.');
+  if (b.status === STATUS.FEST) {
+    throw new Error('Ein festgeschriebener Beleg wird nicht gelöscht, sondern storniert. '
+      + 'Was einmal gestellt wurde, bleibt nachvollziehbar (GoBD).');
+  }
+  const anlagen = await anlagenZuBeleg(belegId);
+  for (const a of anlagen) await loeschen(SPEICHER.ANLAGEN, a.id);
+  await loeschen(SPEICHER.BELEGE, belegId);
+  return true;
 }
 
 /** Storno: hebt einen festgeschriebenen Beleg auf, ohne ihn zu loeschen. */

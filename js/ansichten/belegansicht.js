@@ -310,6 +310,26 @@ export async function belegAnsehen(wurzel, belegId) {
       },
     }, 'Zurückziehen'));
   }
+  // Entwuerfe lassen sich loeschen — sie sind nie nach draussen gegangen. Ein
+  // festgeschriebener Beleg nicht: der wird storniert.
+  if (beleg.status === STATUS.ENTWURF) {
+    reihe.append(el('button', {
+      class: 'knopf leise',
+      onclick: async () => {
+        if (!await bestaetigen('Entwurf löschen?',
+          `${BELEGART_TEXT[beleg.art] || 'Beleg'} ${beleg.nummer} wird entfernt. `
+          + 'Das lässt sich nicht rückgängig machen. Angelegte Vertragsstände bleiben '
+          + 'bestehen und sind im Projekt zu prüfen.')) return;
+        try {
+          const { belegLoeschen } = await import('../vorgang.js');
+          await belegLoeschen(beleg.id);
+          melden('Entwurf gelöscht.');
+          location.hash = '#dashboard';
+        } catch (f) { melden(f.message, 'fehler'); }
+      },
+    }, 'Entwurf löschen'));
+  }
+
   reihe.append(el('button', { class: 'knopf leise', onclick: () => { location.hash = '#dashboard'; } }, 'Zur Übersicht'));
   wurzel.append(reihe);
 }

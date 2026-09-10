@@ -16,6 +16,7 @@ import { SPEICHER, lesen, alle, loeschen, schreiben, personName, kontaktSuchtext
 import { projektStand } from './stammdaten.js';
 import {
   BELEGART, BELEGART_TEXT, IST_RECHNUNG, STATUS, vertraegeZuProjekt, belegUebernehmen,
+  belegBrutto,
 } from '../vorgang.js';
 import { LEISTUNGSBILDER, ZONE_ROEMISCH } from '../hoai/leistungsbilder.js';
 import { runde2, prozent } from '../hoai/geld.js';
@@ -266,7 +267,7 @@ export async function projektAnsehen(wurzel, projektId) {
             b.uebernommen ? 'aus einem anderen Programm übernommen' : null,
           ].filter(Boolean).join(' · ') }),
         ),
-        el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? b.zahlbetrag ?? 0) }),
+        el('div', { class: 'betrag', text: eurZeigen(belegBrutto(b)) }),
       ));
     })));
   }
@@ -395,7 +396,7 @@ export async function adresseAnsehen(wurzel, adresseId) {
           el('div', { class: 'neben', text: [p ? `${p.nummer} ${p.name}` : null,
             b.datumDe || isoNachDe(b.datum)].filter(Boolean).join(' · ') }),
         ),
-        el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? b.zahlbetrag ?? 0) }),
+        el('div', { class: 'betrag', text: eurZeigen(belegBrutto(b)) }),
       ));
     })));
   }

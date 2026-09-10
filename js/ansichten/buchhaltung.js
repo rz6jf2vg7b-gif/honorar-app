@@ -9,7 +9,7 @@ import {
   el, leeren, eurZeigen, isoNachDe, feld, melden, dateiSpeichern, heuteIso,
 } from '../ui.js';
 import { SPEICHER, alle } from '../db.js';
-import { BELEGART_TEXT, IST_RECHNUNG, STATUS, faelligAm } from '../vorgang.js';
+import { BELEGART_TEXT, IST_RECHNUNG, STATUS, faelligAm, belegBrutto } from '../vorgang.js';
 import { buchhaltungCsv, buchhaltungSummen } from '../beleg/buchhaltung.js';
 
 const jahrVon = (iso) => Number(String(iso || '').slice(0, 4));
@@ -120,7 +120,7 @@ export async function buchhaltungZeigen(wurzel) {
             b.uebernommen ? 'übernommen' : null,
             Math.abs(offen) < 0.005 ? 'bezahlt' : (ueber ? 'überfällig' : `${eurZeigen(offen)} offen`),
           ].filter(Boolean).join(' · ') })),
-        el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? 0) }),
+        el('div', { class: 'betrag', text: eurZeigen(belegBrutto(b)) }),
       ));
     })));
   }
