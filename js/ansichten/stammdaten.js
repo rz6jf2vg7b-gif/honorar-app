@@ -224,7 +224,7 @@ async function einspielen(art, danach) {
   // und das Projekt abhakt, hätte beides beim nächsten Import verloren.
   const APP_FELDER = [
     'auftraggeberId', 'ansprechpartnerId', 'abgeschlossen', 'abgerechnet',
-    'appNotiz', 'leitwegId',
+    'appNotiz', 'leitwegId', 'istVerbraucher',
   ];
 
   const zuSchreiben = [];
@@ -317,6 +317,14 @@ export function adresseBearbeiten(adresse, danach) {
       hinweis: 'Nur nötig, wenn sie auf der Rechnung stehen soll — z. B. bei Leistungen '
         + 'ins EU-Ausland.',
     }),
+    // Entscheidet über den Verzugszinssatz und die 40-€-Pauschale. Gegenüber
+    // einem Verbraucher gelten 5 Prozentpunkte über dem Basiszinssatz
+    // (§ 288 Abs. 1 BGB) und keine Pauschale; sonst 9 Punkte (§ 288 Abs. 2).
+    verbraucher: feld({
+      label: '', art: 'schalter', wert: !!adresse?.istVerbraucher,
+      schaltertext: 'Verbraucher (private Bauherrschaft)',
+      hinweis: 'Wirkt auf die Mahnung: geringerer Verzugszins, keine 40-€-Pauschale.',
+    }),
   };
   dialog(adresse ? 'Kontakt bearbeiten' : 'Kontakt anlegen',
     [f.name, f.zusatz,
@@ -325,7 +333,7 @@ export function adresseBearbeiten(adresse, danach) {
       f.strasse, f.zeile2,
       el('div', { class: 'reihe-plzort' }, f.plz, f.ort),
       f.mail, el('div', { class: 'feldreihe' }, f.telefon, f.mobil), f.web,
-      f.notiz, f.leitweg, f.ustId],
+      f.notiz, f.leitweg, f.ustId, f.verbraucher],
     async () => {
       const name = f.name.eingabe.value.trim();
       if (!name) { melden('Der Name fehlt.', 'fehler'); return false; }
@@ -349,6 +357,7 @@ export function adresseBearbeiten(adresse, danach) {
         notiz: f.notiz.eingabe.value.trim(),
         leitwegId: f.leitweg.eingabe.value.trim(),
         ustId: f.ustId.eingabe.value.trim(),
+        istVerbraucher: f.verbraucher.eingabe.checked,
         quelle: adresse?.quelle || 'eigen',
       });
       melden('Gespeichert.'); danach(); return true;

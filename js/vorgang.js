@@ -101,15 +101,17 @@ export function faelligAm(beleg, zahlungszielVorgabe = 30) {
   const ab = beleg.gestelltAm || beleg.datum;
   if (!ab) return null;
   const tage = Number.isFinite(beleg.zahlungszielTage) ? beleg.zahlungszielTage : zahlungszielVorgabe;
-  // In UTC rechnen, nicht in Ortszeit: `new Date('2026-09-01T00:00:00')` ist
-  // Mitternacht MESZ, und toISOString() zieht davon zwei Stunden ab — das Datum
-  // faellt einen Tag zurueck. Derselbe Fallstrick wie in der Zeiterfassung.
-  const [j, m, t] = ab.split('-').map(Number);
-  const d = new Date(Date.UTC(j, m - 1, t + tage));
-  return d.toISOString().slice(0, 10);
+  return tageDazu(ab, tage);
 }
 
 const heute = () => new Date().toISOString().slice(0, 10);
+
+/** Tage auf ein ISO-Datum addieren — in UTC, sonst kostet die Sommerzeit einen Tag. */
+export function tageDazu(iso, tage) {
+  if (!iso) return null;
+  const [j, m, t] = iso.split('-').map(Number);
+  return new Date(Date.UTC(j, m - 1, t + (tage || 0))).toISOString().slice(0, 10);
+}
 
 // ————————————————————————————————————————————————————————————————
 // Nummernvergabe
@@ -319,6 +321,63 @@ export async function vorrechnungen(projektId, eigeneId = null) {
     }));
 }
 
+/**
+ * Eine Rechnung uebernehmen, die in einem anderen Programm gestellt wurde.
+ *
+ * Der Fall, an dem sich das entschied: Ein Projekt wurde ueber Jahre in einem
+ * anderen Honorarprogramm abgerechnet, die Schlussrechnung soll hier entstehen.
+ * Dazu muss die App die frueheren Abschlagsrechnungen kennen — sonst zieht sie
+ * nichts ab und fordert das Gesamthonorar ein zweites Mal.
+ *
+ * Bewusst kein eigener Mechanismus: Der uebernommene Beleg ist ein
+ * festgeschriebener Beleg wie jeder andere und laeuft dadurch von selbst in den
+ * kumulativen Abzug und in den Zahlungsstand. Er traegt nur kein eigenes Blatt —
+ * das Original liegt im Ordner oder als Anlage daran.
+ *
+ * Was NICHT passiert: Es wird nichts nachgerechnet. Was damals gestellt wurde,
+ * gilt, auch wenn die App es heute anders ermitteln wuerde. Alles andere waere
+ * eine nachtraegliche Aenderung einer gestellten Rechnung.
+ */
+export async function belegUebernehmen({
+  projektId, adresseId = null, art = BELEGART.ABSCHLAG, nummer, datum,
+  summeNetto, ustSatz, gezahlt = 0, gezahltAm = null, bemerkung = '',
+}) {
+  if (!nummer) throw new Error('Die Rechnungsnummer der übernommenen Rechnung fehlt.');
+  if (!datum) throw new Error('Das Datum der übernommenen Rechnung fehlt.');
+  if (!Number.isFinite(summeNetto)) throw new Error('Der Nettobetrag fehlt.');
+  if (!Number.isFinite(ustSatz) || ustSatz < 0 || ustSatz > 0.3) {
+    throw new Error('Der Umsatzsteuersatz ist unplausibel.');
+  }
+
+  const ust = runde2(summeNetto * ustSatz);
+  const brutto = runde2(summeNetto + ust);
+  const satz = {
+    id: neueId('b'),
+    uebernommen: true,          // kein eigenes Blatt, nur Zahlenwerk
+    art,
+    projektId,
+    adresseId,
+    nummer,
+    datum,
+    datumDe: datum.split('-').reverse().join('.'),
+    ustSatz,
+    kumulativ: true,
+    status: STATUS.FEST,
+    festgeschrieben: new Date().toISOString(),
+    angelegt: new Date().toISOString(),
+    summeNetto: runde2(summeNetto),
+    ust,
+    brutto,
+    zahlbetrag: brutto,
+    gezahlt: runde2(gezahlt),
+    zahlungen: gezahlt ? [{ betrag: runde2(gezahlt), datum: gezahltAm || datum }] : [],
+    gestelltAm: datum,
+    notiz: bemerkung,
+  };
+  await schreiben(SPEICHER.BELEGE, satz);
+  return satz;
+}
+
 /** Offene Posten eines Projekts fuer die Zahlungsuebersicht. */
 export async function offenePosten(projektId, eigeneId = null) {
   const belege = await alle(SPEICHER.BELEGE);
@@ -357,6 +416,16 @@ export async function belegRechnen(entwurf, vertrag) {
     ? await offenePosten(entwurf.projektId, entwurf.id)
     : [];
 
+  // Die Skontofrist laeuft ab Rechnungsdatum. Waere sie ab Versand zu rechnen,
+  // stuende auf dem Blatt ein Datum, das sich nach dem Druck noch aendert.
+  const skonto = (entwurf.skontoProzent > 0 && IST_RECHNUNG(entwurf.art))
+    ? {
+      prozent: entwurf.skontoProzent,
+      tage: entwurf.skontoTage ?? 14,
+      bis: tageDazu(entwurf.datum, entwurf.skontoTage ?? 14),
+    }
+    : null;
+
   const abrechnung = erstelleAbrechnung({
     // Die Belegart wird durchgereicht, nicht auf "Einzelrechnung" abgebildet:
     // Sonst stand auf einem Angebot "Einzelrechnung".
@@ -370,6 +439,7 @@ export async function belegRechnen(entwurf, vertrag) {
       : null,
     bisherigeRechnungen: abzuege,
     zahlungsstand,
+    skonto,
     zahlungsstandVerrechnen: !!entwurf.zahlungsstandVerrechnen,
   });
 
@@ -525,13 +595,43 @@ export async function belegStornieren(beleg, grund) {
 }
 
 /** Zahlungseingang erfassen — auch bei festgeschriebenen Belegen zulaessig. */
-export async function zahlungErfassen(belegId, betrag, datum) {
+export async function zahlungErfassen(belegId, betrag, datum, art = 'zahlung') {
   const b = await lesen(SPEICHER.BELEGE, belegId);
   if (!b) throw new Error('Beleg nicht gefunden.');
-  const zahlungen = [...(b.zahlungen || []), { betrag: runde2(betrag), datum: datum || new Date().toISOString().slice(0, 10) }];
+  const zahlungen = [...(b.zahlungen || []), {
+    betrag: runde2(betrag),
+    datum: datum || heute(),
+    // 'skonto' ist keine Zahlung, sondern der gewaehrte Nachlass. Er schliesst
+    // die Forderung mit ab, gehoert aber getrennt ausgewiesen: Nach § 17 Abs. 1
+    // UStG ist die Umsatzsteuer im Zeitpunkt der Inanspruchnahme zu berichtigen,
+    // und der Steuerberater muss sehen, um welchen Betrag.
+    art,
+  }];
   const gezahlt = runde2(zahlungen.reduce((s, z) => s + z.betrag, 0));
   await schreiben(SPEICHER.BELEGE, { ...b, zahlungen, gezahlt });
   return gezahlt;
+}
+
+/**
+ * Skonto abrechnen: Der Auftraggeber hat fristgerecht gezahlt und den
+ * vereinbarten Abzug genommen.
+ *
+ * Der Nachlass wird als eigener Posten gefuehrt, nicht als Zahlung — sonst
+ * stuende in der Buchhaltung ein Geldeingang, den es nie gab. Aus dem gebuchten
+ * Bruttobetrag ergibt sich die Berichtigung: Entgelt und Steuer mindern sich im
+ * selben Verhaeltnis.
+ */
+export async function skontoGewaehren(belegId, betrag, datum) {
+  const b = await lesen(SPEICHER.BELEGE, belegId);
+  if (!b) throw new Error('Beleg nicht gefunden.');
+  const satz = b.ustSatz || 0;
+  const gezahlt = await zahlungErfassen(belegId, betrag, datum, 'skonto');
+  return {
+    gezahlt,
+    // Fuer die Umsatzsteuer-Berichtigung nach § 17 Abs. 1 UStG.
+    minderungNetto: runde2(betrag / (1 + satz)),
+    minderungUst: runde2(betrag - betrag / (1 + satz)),
+  };
 }
 
 // ————————————————————————————————————————————————————————————————

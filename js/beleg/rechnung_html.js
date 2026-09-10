@@ -280,6 +280,11 @@ export function rechnungHtml(d) {
     ${d.anrede ? `<p>${h(d.anrede)}</p>` : ''}
     ${d.anschreiben ? `<p>${h(d.anschreiben)}</p>` : ''}
 
+    ${d.auftraggeber ? `<p class="auftraggeber">Auftraggeber: ${h(d.auftraggeber.name)}${
+      d.auftraggeber.strasse ? `, ${h(d.auftraggeber.strasse)}` : ''}${
+      d.auftraggeber.plzOrt ? `, ${h(d.auftraggeber.plzOrt)}` : ''}. Die Rechnung geht
+      vereinbarungsgemäß an den oben genannten Empfänger.</p>` : ''}
+
     <h2>${ueberschriftLeistungen(d, ermittlungen)}</h2>
     ${grundlagen}
 
@@ -287,6 +292,11 @@ export function rechnungHtml(d) {
       <div class="betraglabel">${h(betraglabel)}${a.ustSatz ? ` · inkl. ${h(prozent(a.ustSatz))} USt.` : ''}</div>
       <div class="betragwert">${h(eur(a.zahlbetrag))}</div>
     </div>
+
+    ${fordertGeld && a.skonto ? `<p class="zahlungshinweis skonto">
+      Bei Zahlung bis zum ${h(deDatum(a.skonto.bis))} gewähren wir
+      ${h(prozent(a.skonto.prozent))} Skonto — ${h(eur(a.skonto.betrag))}.
+      Der Zahlbetrag beträgt dann ${h(eur(a.skonto.zahlbetrag))}.</p>` : ''}
 
     ${fordertGeld ? `<p class="zahlungshinweis">${h(d.zahlungsziel
       || 'Bitte überweisen Sie den Rechnungsbetrag ohne Abzüge auf das folgende Konto.')}
@@ -500,7 +510,7 @@ ${body}
 </body></html>`;
 }
 
-const STIL = `
+export const STIL = `
 *{ box-sizing:border-box; }
 html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 body{ margin:0; background:#e8e6e1; color:var(--ink-soft);
@@ -561,6 +571,7 @@ h1{ margin:3mm 0 0; font:300 var(--pt-titel)/1.15 var(--schrift);
   top:var(--text-top); bottom:26mm; }
 .brieftext p{ margin:0 0 3mm; }
 .gruss{ margin-top:5mm; }
+.auftraggeber{ margin:0 0 3mm; color:var(--grey-2); }
 .signatur{ margin-top:6mm; }
 .bank{ font:var(--pt-mono-klein)/1.5 var(--mono); color:var(--grey-2); }
 

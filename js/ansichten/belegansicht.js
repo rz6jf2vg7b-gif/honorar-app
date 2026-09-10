@@ -42,6 +42,14 @@ export async function belegAnsehen(wurzel, belegId) {
   // laeuft. Sie steht als Verweis auf dem Blatt, damit der Auftraggeber sie
   // gegen seine Unterlagen halten kann, ohne nachzufragen.
   const bezug = beleg.bezugBelegId ? await lesen(SPEICHER.BELEGE, beleg.bezugBelegId) : null;
+  // Rechnungsempfaenger und Auftraggeber sind nicht immer dieselbe Person: Die
+  // Rechnung geht an die Hausverwaltung, der Vertrag besteht mit der
+  // Eigentuemergemeinschaft. Der Beleg muss dann beide nennen — sonst fehlt dem
+  // Empfaenger der Bezug, und im Streit ist offen, wem gegenueber abgerechnet
+  // wurde. Ohne abweichende Angabe ist der Auftraggeber auch der Empfaenger.
+  const auftraggeber = beleg.auftraggeberId && beleg.auftraggeberId !== beleg.adresseId
+    ? await lesen(SPEICHER.ADRESSEN, beleg.auftraggeberId)
+    : null;
 
   // Festgeschriebene Belege werden aus ihrem eingefrorenen Stand gezeigt, nicht neu
   // gerechnet — sonst wuerde ein spaeterer Nachtrag eine alte Rechnung veraendern.
@@ -92,6 +100,12 @@ export async function belegAnsehen(wurzel, belegId) {
       zeile2: adresse.adresszeile2 || '',
       strasse: adresse.strasse, plzOrt: `${adresse.plz || ''} ${adresse.ort || ''}`.trim(),
     } : { name: '—', strasse: '', plzOrt: '' },
+    auftraggeber: auftraggeber ? {
+      name: auftraggeber.name,
+      zusatz: auftraggeber.zusatz,
+      strasse: auftraggeber.strasse,
+      plzOrt: `${auftraggeber.plz || ''} ${auftraggeber.ort || ''}`.trim(),
+    } : null,
     projekt: projekt
       ? { nummer: projekt.nummer, name: projekt.name, kuerzel: projekt.kuerzel }
       : { nummer: '—', name: '—' },
@@ -654,7 +668,9 @@ async function zahlungsBlock(wurzel, beleg, neuZeichnen) {
     ));
 
   for (const z of beleg.zahlungen || []) {
-    karte.append(el('p', { class: 'klein', text: `${eurZeigen(z.betrag)} am ${isoNachDe(z.datum)}` }));
+    karte.append(el('p', { class: 'klein', text:
+      `${eurZeigen(z.betrag)} am ${isoNachDe(z.datum)}`
+      + (z.art === 'skonto' ? ' — gewährtes Skonto' : '') }));
   }
 
   if (Math.abs(offen) > 0.005) {
@@ -668,22 +684,44 @@ async function zahlungsBlock(wurzel, beleg, neuZeichnen) {
       hinweis: 'Weicht der Betrag ab, bleibt die Differenz offen und fließt in den '
         + 'Zahlbetrag der nächsten Rechnung dieses Projekts ein.',
     });
-    karte.append(el('div', { class: 'feldreihe' }, datumF, betragF),
-      el('div', { class: 'knopfreihe' },
-        el('button', {
-          class: 'knopf',
-          onclick: async () => {
-            const b = zahlLesen(betragF.eingabe.value);
-            if (!b) { melden('Zahlbetrag fehlt.', 'fehler'); return; }
-            await zahlungErfassen(beleg.id, b, datumF.eingabe.value || heuteIso());
-            const rest = Math.round((offen - b) * 100) / 100;
-            melden(Math.abs(rest) < 0.005
-              ? 'Vollständig bezahlt.'
-              : `Erfasst. Offen bleiben ${eurZeigen(rest)} — sie werden auf der nächsten `
-                + 'Rechnung dieses Projekts ausgewiesen.');
-            neuZeichnen();
-          },
-        }, 'Zahlung erfassen')));
+    const knoepfe = el('div', { class: 'knopfreihe' },
+      el('button', {
+        class: 'knopf',
+        onclick: async () => {
+          const b = zahlLesen(betragF.eingabe.value);
+          if (!b) { melden('Zahlbetrag fehlt.', 'fehler'); return; }
+          await zahlungErfassen(beleg.id, b, datumF.eingabe.value || heuteIso());
+          const rest = Math.round((offen - b) * 100) / 100;
+          melden(Math.abs(rest) < 0.005
+            ? 'Vollständig bezahlt.'
+            : `Erfasst. Offen bleiben ${eurZeigen(rest)} — sie werden auf der nächsten `
+              + 'Rechnung dieses Projekts ausgewiesen.');
+          neuZeichnen();
+        },
+      }, 'Zahlung erfassen'));
+
+    // Skonto abschliessen: Der Auftraggeber hat fristgerecht gezahlt und den
+    // Abzug genommen. Der Rest ist dann kein Aussenstand, sondern der gewaehrte
+    // Nachlass — und die Umsatzsteuer darauf ist zu berichtigen.
+    if (beleg.skontoProzent > 0) {
+      knoepfe.append(el('button', {
+        class: 'knopf zweit',
+        onclick: async () => {
+          const ust = beleg.ustSatz || 0;
+          const netto = Math.round((offen / (1 + ust)) * 100) / 100;
+          if (!await bestaetigen(`${eurZeigen(offen)} als Skonto abschließen?`,
+            `Der Restbetrag wird als gewährtes Skonto verbucht, nicht als Zahlung. `
+            + `Für die Umsatzsteuer-Voranmeldung: Das Entgelt mindert sich um `
+            + `${eurZeigen(netto)}, die Umsatzsteuer um ${eurZeigen(offen - netto)} `
+            + `(§ 17 Abs. 1 UStG, im Zeitpunkt der Zahlung).`)) return;
+          const { skontoGewaehren } = await import('../vorgang.js');
+          await skontoGewaehren(beleg.id, offen, datumF.eingabe.value || heuteIso());
+          melden('Skonto verbucht. Die Rechnung ist abgeschlossen.');
+          neuZeichnen();
+        },
+      }, 'Rest ist Skonto'));
+    }
+    karte.append(el('div', { class: 'feldreihe' }, datumF, betragF), knoepfe);
   } else {
     karte.append(el('p', { class: 'klein', text: 'Vollständig bezahlt.' }));
   }

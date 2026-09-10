@@ -51,9 +51,12 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
     zahlungsstandVerrechnen: true,
     einbehaltBrutto: 0,
     einbehaltText: '',
+    skontoProzent: 0,
+    skontoTage: 14,
     leistungszeitraum: '',
     leistungsdatum: '',
     bezugBelegId: null,
+    auftraggeberId: null,
     anrede: '',
     anschreiben: '',
     // Angebot und Nachtrag
@@ -325,7 +328,50 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
       if (k) k.disabled = !entwurf.adresseId;
     };
     zeigen();
-    box.append(anzeige, weiterLeiste('Weiter', null, !!entwurf.adresseId));
+    box.append(anzeige);
+
+    // Rechnungsempfaenger ist nicht immer der Auftraggeber: Die Rechnung geht an
+    // die Hausverwaltung, der Vertrag besteht mit der Eigentuemergemeinschaft.
+    // Steht der Auftraggeber dann nicht auf dem Beleg, fehlt dem Empfaenger der
+    // Bezug — und im Streit ist offen, wem gegenueber abgerechnet wurde.
+    const abweichend = el('div');
+    const abwZeigen = () => {
+      leeren(abweichend);
+      const ag = entwurf.auftraggeberId
+        ? adressen.find((a) => a.id === entwurf.auftraggeberId) : null;
+      if (ag) {
+        abweichend.append(el('div', { class: 'karte' },
+          el('div', { class: 'kicker', text: 'AUFTRAGGEBER' }),
+          el('h3', { text: ag.name }),
+          el('div', { class: 'klein', text: 'Steht als Auftraggeber auf dem Beleg. '
+            + 'Der Empfänger oben bekommt die Rechnung.' }),
+          el('button', {
+            class: 'knopf leise', type: 'button',
+            onclick: () => { entwurf.auftraggeberId = null; abwZeigen(); },
+          }, 'Entfernen')));
+      } else {
+        abweichend.append(el('button', {
+          class: 'knopf leise', type: 'button',
+          onclick: () => {
+            leeren(abweichend);
+            abweichend.append(suchauswahl({
+              label: 'Auftraggeber suchen',
+              eintraege: adressen.filter((a) => a.id !== entwurf.adresseId),
+              textVon: (a) => a.name,
+              nebenVon: (a) => [personName(a), `${a.plz || ''} ${a.ort || ''}`.trim()]
+                .filter(Boolean).join(' · '),
+              suchtextVon: kontaktSuchtext,
+              leerHinweis: 'Kein Treffer.',
+              onWahl: (a) => { entwurf.auftraggeberId = a.id; abwZeigen(); },
+            }), el('button', {
+              class: 'knopf leise', type: 'button', onclick: abwZeigen,
+            }, 'Abbrechen'));
+          },
+        }, 'Auftraggeber weicht ab'));
+      }
+    };
+    abwZeigen();
+    box.append(abweichend, weiterLeiste('Weiter', null, !!entwurf.adresseId));
     const k = box.querySelector('.knopfreihe.fest button.akzent');
     if (k) k.disabled = !entwurf.adresseId;
   }
@@ -815,7 +861,23 @@ export async function assistentZeigen(wurzel, vorgabe = {}) {
           entwurf.zahlungsstandVerrechnen = w === 'verrechnen';
         },
       });
-      box.append(el('h2', { text: 'Abrechnung' }), kumulativF, einbehaltF, einbehaltTextF, zahlungF);
+      // Skonto: Die Rechnung weist den vollen Betrag aus, der Abzug ist eine
+      // Bedingung. Erst wenn fristgerecht gezahlt wird, mindert sich das Entgelt
+      // — und dann ist die Umsatzsteuer nach § 17 Abs. 1 UStG zu berichtigen.
+      const skontoF = feld({
+        label: 'Skonto', art: 'zahl', einheit: '%',
+        wert: entwurf.skontoProzent ? zahlZeigen(entwurf.skontoProzent * 100) : '',
+        hinweis: 'Leer lassen heißt: kein Skonto. Der Abzug steht als Angebot auf dem Beleg, '
+          + 'abgerechnet wird er erst beim Zahlungseingang.',
+        onEingabe: (w) => { entwurf.skontoProzent = (w ?? 0) / 100; },
+      });
+      const skontoTageF = feld({
+        label: 'zahlbar innerhalb', art: 'zahl', einheit: 'Tagen',
+        wert: String(entwurf.skontoTage ?? 14),
+        onEingabe: (w) => { entwurf.skontoTage = w ?? 14; },
+      });
+      box.append(el('h2', { text: 'Abrechnung' }), kumulativF, einbehaltF, einbehaltTextF,
+        zahlungF, el('div', { class: 'feldreihe' }, skontoF, skontoTageF));
     }
 
     box.append(weiterLeiste('Weiter', async () => {

@@ -16,7 +16,7 @@
 // Nutzerdaten liegen in IndexedDB und werden hier nie angefasst — ein Fehler im
 // Service Worker darf niemals eine Rechnung kosten.
 
-const FASSUNG = 'honorarapp-v21';
+const FASSUNG = 'honorarapp-v22';
 
 // Wie lange auf das Netz gewartet wird, bevor der Zwischenspeicher einspringt.
 // Kurz genug, dass es im Zug nicht haengt; lang genug fuer eine normale Antwort.
@@ -30,6 +30,7 @@ const KERN = [
   './js/hoai/rechnen.js', './js/hoai/abrechnung.js',
   './js/beleg/rechnung_html.js', './js/beleg/cd.js', './js/beleg/pflichtangaben.js',
   './js/beleg/angebot.js', './js/beleg/xrechnung.js',
+  './js/beleg/mahnung.js', './js/beleg/mahnung_html.js', './js/beleg/buchhaltung.js',
   './js/sync/microsoft.js', './js/sync/onedrive.js', './js/sync/abgleich.js',
   './js/sync/anlagen.js',
   './js/ansichten/dashboard.js', './js/ansichten/belegansicht.js',
@@ -39,6 +40,7 @@ const KERN = [
   './js/ansichten/hoai.js', './js/ansichten/vorlagen.js',
   './js/ansichten/rechner.js', './js/ansichten/herleitung.js',
   './js/ansichten/synopse.js', './js/ansichten/rechtliches.js', './js/ansichten/unterlagen.js',
+  './js/ansichten/buchhaltung.js',
   './js/hoai/grundleistungen.js', './js/hoai/fassungen.js', './js/hoai/synopse.js',
   './js/hoai/honorarzonen.js', './js/hoai/objektlisten.js', './js/ansichten/honorarzone.js',
 ];

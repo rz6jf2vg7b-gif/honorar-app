@@ -58,7 +58,12 @@ export async function dashboardZeigen(wurzel) {
       { text: 'Ersten Beleg anlegen', weg: '#neu', fertig: false,
         neben: 'Angebot, Rechnung oder Nachtrag' },
     ];
-    wurzel.append(el('div', { class: 'kennzahlen' },
+    wurzel.append(el('div', { class: 'knopfreihe' }, el('button', {
+    class: 'knopf leise',
+    onclick: () => { location.hash = '#buchhaltung'; },
+  }, 'Belege nach Zeitraum · Buchhaltung')));
+
+  wurzel.append(el('div', { class: 'kennzahlen' },
       kachel('Offen', eurZeigen(0), 'keine Rechnung gestellt'),
       kachel('Überfällig', eurZeigen(0), 'nichts überfällig'),
       kachel(`Eingegangen ${new Date().getFullYear()}`, eurZeigen(0), 'noch kein Eingang'),

@@ -8,10 +8,15 @@
 // Bearbeitet wird von hier aus; die Formulare liegen weiter in stammdaten.js,
 // damit es nur eine Stelle gibt, an der ein Datensatz geschrieben wird.
 
-import { el, leeren, eurZeigen, isoNachDe, heuteIso, melden, bestaetigen, zurueck, feld, suchauswahl } from '../ui.js';
+import {
+  el, leeren, eurZeigen, isoNachDe, heuteIso, melden, bestaetigen, zurueck,
+  feld, suchauswahl, zahlLesen,
+} from '../ui.js';
 import { SPEICHER, lesen, alle, loeschen, schreiben, personName, kontaktSuchtext } from '../db.js';
 import { projektStand } from './stammdaten.js';
-import { BELEGART_TEXT, IST_RECHNUNG, STATUS, vertraegeZuProjekt } from '../vorgang.js';
+import {
+  BELEGART, BELEGART_TEXT, IST_RECHNUNG, STATUS, vertraegeZuProjekt, belegUebernehmen,
+} from '../vorgang.js';
 import { LEISTUNGSBILDER, ZONE_ROEMISCH } from '../hoai/leistungsbilder.js';
 import { runde2, prozent } from '../hoai/geld.js';
 
@@ -257,6 +262,7 @@ export async function projektAnsehen(wurzel, projektId) {
             b.datumDe || isoNachDe(b.datum),
             empf?.name,
             b.status === STATUS.ENTWURF ? 'Entwurf' : (b.status === STATUS.STORNIERT ? 'storniert' : null),
+            b.uebernommen ? 'aus einem anderen Programm übernommen' : null,
           ].filter(Boolean).join(' · ') }),
         ),
         el('div', { class: 'betrag', text: eurZeigen(b.brutto ?? b.zahlbetrag ?? 0) }),
@@ -270,6 +276,16 @@ export async function projektAnsehen(wurzel, projektId) {
       class: 'knopf akzent',
       onclick: () => { location.hash = `#neu/${projekt.id}`; },
     }, 'Beleg für dieses Projekt'),
+    el('button', {
+      class: 'knopf zweit',
+      onclick: () => uebernahmeFormular(wurzel, projekt, adressen, () => {
+        leeren(wurzel); projektAnsehen(wurzel, projektId);
+      }),
+    }, 'Frühere Rechnung übernehmen'),
+    el('button', {
+      class: 'knopf zweit',
+      onclick: () => mahnungFormular(wurzel, projekt, adressen, eigene),
+    }, 'Mahnung'),
     el('button', {
       class: 'knopf zweit',
       onclick: async () => {
@@ -399,4 +415,215 @@ export async function adresseAnsehen(wurzel, adresseId) {
       },
     }, 'Entfernen'),
   ));
+}
+
+/**
+ * Eine Rechnung erfassen, die in einem anderen Programm gestellt wurde.
+ *
+ * Gebaut fuer den Uebergang: Wurde ein Projekt ueber Jahre in einem anderen
+ * Honorarprogramm abgerechnet und soll die Schlussrechnung hier entstehen,
+ * fehlen der App die frueheren Abschlagsrechnungen — sie zieht dann nichts ab
+ * und fordert das Gesamthonorar ein zweites Mal.
+ *
+ * Erfasst wird nur das Zahlenwerk, nicht der Rechenweg. Was damals gestellt
+ * wurde, gilt — die App rechnet es nicht nach und erzeugt kein Blatt dafuer.
+ * Das Original gehoert als Anlage an den Beleg oder in den Projektordner.
+ */
+function uebernahmeFormular(wurzel, projekt, adressen, fertig) {
+  const dlg = el('dialog', { class: 'karte', style: 'max-width:520px;border-radius:2px;' });
+  const artF = feld({
+    label: 'Rechnungsart', art: 'auswahl', wert: BELEGART.ABSCHLAG,
+    optionen: [
+      { wert: BELEGART.ABSCHLAG, text: 'Abschlagsrechnung' },
+      { wert: BELEGART.TEILSCHLUSS, text: 'Teilschlussrechnung' },
+      { wert: BELEGART.SCHLUSS, text: 'Schlussrechnung' },
+      { wert: BELEGART.EINZEL, text: 'Einzelrechnung' },
+    ],
+  });
+  const nummerF = feld({ label: 'Rechnungsnummer', wert: '', platzhalter: 'wie im alten Programm' });
+  const datumF = feld({ label: 'Rechnungsdatum', art: 'date', wert: '' });
+  const nettoF = feld({ label: 'Nettobetrag', art: 'geld', einheit: '€', wert: '' });
+  const ustF = feld({ label: 'Umsatzsteuer', art: 'zahl', einheit: '%', wert: '19' });
+  const gezahltF = feld({ label: 'Davon gezahlt', art: 'geld', einheit: '€ brutto', wert: '' });
+  const gezahltAmF = feld({ label: 'Gezahlt am', art: 'date', wert: '' });
+  const bemerkungF = feld({ label: 'Bemerkung', wert: '', platzhalter: 'z. B. aus HOAI-Pro' });
+
+  dlg.append(
+    el('h3', { text: 'Frühere Rechnung übernehmen' }),
+    el('p', { class: 'klein', text: 'Für Projekte, die in einem anderen Programm begonnen wurden. '
+      + 'Die Rechnung wird nicht nachgerechnet — sie zählt mit ihrem gestellten Betrag in den '
+      + 'kumulativen Abzug und in den Zahlungsstand. Ein Blatt entsteht dafür nicht.' }),
+    el('div', { class: 'feldreihe' }, artF, nummerF),
+    el('div', { class: 'feldreihe' }, datumF, ustF),
+    nettoF,
+    el('div', { class: 'feldreihe' }, gezahltF, gezahltAmF),
+    bemerkungF,
+    el('div', { class: 'knopfreihe' },
+      el('button', { class: 'knopf zweit', onclick: () => dlg.close() }, 'Abbrechen'),
+      el('button', {
+        class: 'knopf',
+        onclick: async () => {
+          try {
+            await belegUebernehmen({
+              projektId: projekt.id,
+              adresseId: projekt.adresseId || null,
+              art: artF.eingabe.value,
+              nummer: nummerF.eingabe.value.trim(),
+              datum: datumF.eingabe.value,
+              summeNetto: zahlLesen(nettoF.eingabe.value),
+              ustSatz: (zahlLesen(ustF.eingabe.value) ?? 0) / 100,
+              gezahlt: zahlLesen(gezahltF.eingabe.value) || 0,
+              gezahltAm: gezahltAmF.eingabe.value || null,
+              bemerkung: bemerkungF.eingabe.value.trim(),
+            });
+            melden('Rechnung übernommen.');
+            dlg.close();
+            fertig();
+          } catch (f) { melden(f.message, 'fehler'); }
+        },
+      }, 'Übernehmen')),
+  );
+  document.body.append(dlg);
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.showModal();
+}
+
+/**
+ * Mahnung fuer die offenen Rechnungen eines Projekts.
+ *
+ * Am Projekt, nicht am einzelnen Beleg: Sind drei Abschlagsrechnungen offen,
+ * schreibt man eine Mahnung ueber alle drei, nicht drei Briefe. Der Bauherr
+ * bekommt sonst Post, die einander widerspricht.
+ */
+async function mahnungFormular(wurzel, projekt, adressen, belege) {
+  const { faelligAm, IST_RECHNUNG: istR, STATUS: st } = await import('../vorgang.js');
+  const { mahnungAufstellen, MAHNSTUFEN, BASISZINS_STAND } = await import('../beleg/mahnung.js');
+  const { einstellungenLesen } = await import('../db.js');
+  const einst = await einstellungenLesen();
+  const ziel = Number.isFinite(einst.vorgaben?.zahlungsziel) ? einst.vorgaben.zahlungsziel : 30;
+
+  const offene = belege
+    .filter((b) => istR(b.art) && b.status === st.FEST
+      && Math.abs((b.brutto || 0) - (b.gezahlt || 0)) > 0.005)
+    .map((b) => ({
+      beleg: b,
+      nummer: b.nummer,
+      datum: b.datum,
+      faelligAm: faelligAm(b, ziel),
+      offen: Math.round(((b.brutto || 0) - (b.gezahlt || 0)) * 100) / 100,
+    }));
+
+  if (!offene.length) {
+    melden('Zu diesem Projekt ist keine Rechnung offen.');
+    return;
+  }
+
+  const heute = heuteIso();
+  const empf = adressen.find((a) => a.id === (offene[0].beleg.adresseId || projekt.adresseId));
+
+  const stufeF = feld({
+    label: 'Mahnstufe', art: 'auswahl', wert: '1',
+    optionen: MAHNSTUFEN.map((s) => ({ wert: String(s.nr), text: `${s.nr}. ${s.titel}` })),
+  });
+  const datumF = feld({ label: 'Datum der Mahnung', art: 'date', wert: heute });
+  const verbraucherF = feld({
+    label: '', art: 'schalter', wert: !!empf?.istVerbraucher,
+    schaltertext: 'Empfänger ist Verbraucher',
+    hinweis: 'Verbraucher: 5 Prozentpunkte über dem Basiszinssatz (§ 288 Abs. 1 BGB) und '
+      + 'keine 40-€-Pauschale. Sonst 9 Prozentpunkte (§ 288 Abs. 2 BGB).',
+  });
+  const pauschaleF = feld({
+    label: '', art: 'schalter', wert: false,
+    schaltertext: 'Verzugspauschale 40 € ansetzen (§ 288 Abs. 5 BGB)',
+  });
+
+  const auswahl = offene.map((p) => ({
+    p, f: feld({
+      label: '', art: 'schalter', wert: true,
+      schaltertext: `${p.nummer} · ${eurZeigen(p.offen)} offen`
+        + (p.faelligAm ? ` · fällig seit ${isoNachDe(p.faelligAm)}` : ' · ohne Fälligkeit'),
+    }),
+  }));
+
+  const vorschau = el('div', { class: 'karte' });
+  const rechnen = () => {
+    const gewaehlt = auswahl.filter((x) => x.f.eingabe.checked).map((x) => x.p);
+    const m = mahnungAufstellen({
+      stufe: Number(stufeF.eingabe.value),
+      datum: datumF.eingabe.value || heute,
+      posten: gewaehlt,
+      istVerbraucher: verbraucherF.eingabe.checked,
+      pauschale: pauschaleF.eingabe.checked,
+    });
+    leeren(vorschau);
+    vorschau.append(el('dl', { class: 'werte' },
+      el('div', {}, el('dt', { text: 'Hauptforderung' }), el('dd', { text: eurZeigen(m.hauptforderung) })),
+      el('div', {}, el('dt', { text: 'Verzugszinsen' }), el('dd', { text: eurZeigen(m.zinsen) })),
+      m.pauschale ? el('div', {}, el('dt', { text: 'Verzugspauschale' }), el('dd', { text: eurZeigen(m.pauschale) })) : null,
+      el('div', { class: 'summe' }, el('dt', { text: 'Gesamtforderung' }), el('dd', { text: eurZeigen(m.gesamt) })),
+    ));
+    if (m.zinssatzUngeprueft) {
+      vorschau.append(el('p', { class: 'hinweis warnung', text:
+        `Der Basiszinssatz ist nur bis zum ${isoNachDe(BASISZINS_STAND)} gepflegt. `
+        + 'Für spätere Zeiträume rechnet die App mit dem letzten bekannten Wert weiter — '
+        + 'bitte bei der Bundesbank nachsehen, bevor die Mahnung rausgeht.' }));
+    }
+    if (gewaehlt.some((p) => !p.faelligAm)) {
+      vorschau.append(el('p', { class: 'hinweis', text:
+        'Auf Rechnungen ohne Fälligkeitsdatum werden keine Zinsen berechnet. '
+        + 'Trage das Versanddatum am Beleg nach, wenn Zinsen gefordert werden sollen.' }));
+    }
+    return m;
+  };
+
+  for (const x of auswahl) x.f.eingabe.addEventListener('change', rechnen);
+  for (const f of [stufeF, datumF, verbraucherF, pauschaleF]) {
+    f.eingabe.addEventListener('change', rechnen);
+  }
+
+  const dlg = el('dialog', { class: 'karte', style: 'max-width:560px;width:94%;border-radius:2px;' },
+    el('h3', { text: 'Mahnung' }),
+    el('p', { class: 'klein', text: 'Eine Mahnung über alle offenen Rechnungen dieses Projekts. '
+      + 'Verzugszinsen werden taggenau ab Fälligkeit gerechnet.' }),
+    el('div', { class: 'feldreihe' }, stufeF, datumF),
+    ...auswahl.map((x) => x.f),
+    verbraucherF, pauschaleF,
+    vorschau,
+    el('div', { class: 'knopfreihe' },
+      el('button', { class: 'knopf zweit', onclick: () => dlg.close() }, 'Abbrechen'),
+      el('button', {
+        class: 'knopf',
+        onclick: async () => {
+          const m = rechnen();
+          if (!m.zeilen.length) { melden('Keine Rechnung gewählt.', 'fehler'); return; }
+          const { mahnungHtml } = await import('../beleg/mahnung_html.js');
+          const { cdVervollstaendigen } = await import('../beleg/cd.js');
+          const { anschriftZeilen, personName } = await import('../db.js');
+          const stufe = MAHNSTUFEN.find((s) => s.nr === m.stufe) || MAHNSTUFEN[0];
+          const { tageDazu } = await import('../vorgang.js');
+          const html = mahnungHtml({
+            mahnung: m,
+            buero: { ...einst.buero, ...anschriftZeilen(einst.buero) },
+            empfaenger: empf ? {
+              name: empf.name,
+              ansprechpartner: personName(empf) ? `z. Hd. ${personName(empf)}` : '',
+              strasse: empf.strasse,
+              plzOrt: `${empf.plz || ''} ${empf.ort || ''}`.trim(),
+            } : { name: '—' },
+            projekt: { nummer: projekt.nummer, name: projekt.name },
+            zahlbarBis: tageDazu(m.datum, stufe.frist),
+            cd: cdVervollstaendigen(einst.cd || {}),
+          });
+          const w = window.open('', '_blank');
+          if (!w) { melden('Der Browser hat das Fenster blockiert.', 'fehler'); return; }
+          w.document.open(); w.document.write(html); w.document.close();
+          setTimeout(() => { try { w.print(); } catch { /* egal */ } }, 700);
+          dlg.close();
+        },
+      }, 'Mahnung drucken')),
+  );
+  rechnen();
+  document.body.append(dlg);
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.showModal();
 }

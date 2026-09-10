@@ -56,6 +56,7 @@ export const FORDERT_ZAHLUNG = (art) => !['AN', 'NA'].includes(art);
  *                                  fuer die Uebersicht offener Betraege
  * @param {boolean} [r.zahlungsstandVerrechnen] Ueber-/Unterzahlungen in den
  *                                  Zahlbetrag einrechnen (wie HOAI-Pro es tut)
+ * @param {object} [r.skonto]       {prozent, tage, bis} — Skontovereinbarung
  */
 export function erstelleAbrechnung(r) {
   if (!ART_BEZEICHNUNG[r.art]) throw new Error(`Unbekannte Rechnungsart: ${r.art}`);
@@ -122,6 +123,35 @@ export function erstelleAbrechnung(r) {
   const saldoOffen = runde2(offeneposten.reduce((s, z) => s + z.offen, 0));
   const zahlbetrag = r.zahlungsstandVerrechnen ? runde2(brutto + saldoOffen) : brutto;
 
+  // 6 Skonto
+  //
+  // Die Rechnung weist den vollen Betrag aus. Skonto ist eine Bedingung, kein
+  // Abzug: Erst wenn der Auftraggeber fristgerecht zahlt, mindert sich das
+  // Entgelt — und dann ist die Umsatzsteuer nach § 17 Abs. 1 UStG zu berichtigen,
+  // im Zeitpunkt der Zahlung, nicht im Zeitpunkt der Rechnung. Wer den Abzug
+  // schon hier vornimmt, weist zu wenig Umsatzsteuer aus und schuldet sie
+  // trotzdem (§ 14c UStG).
+  //
+  // Der Skontosatz bezieht sich auf den Bruttobetrag dieser Rechnung, nicht auf
+  // den Zahlbetrag: Verrechnete Altposten sind nicht skontierfaehig, sie stammen
+  // aus einer anderen Rechnung mit eigener Frist.
+  let skonto = null;
+  if (r.skonto && r.skonto.prozent > 0 && FORDERT_ZAHLUNG(r.art)) {
+    const betrag = runde2(brutto * r.skonto.prozent);
+    skonto = {
+      prozent: r.skonto.prozent,
+      tage: r.skonto.tage ?? null,
+      bis: r.skonto.bis || null,
+      betrag,
+      // Was zu zahlen ist, wenn er die Frist einhaelt.
+      zahlbetrag: runde2(zahlbetrag - betrag),
+      // Die Aufteilung fuer die spaetere Berichtigung: Der Nachlass mindert
+      // Entgelt und Steuer im selben Verhaeltnis.
+      netto: runde2(betrag / (1 + r.ustSatz)),
+      ust: runde2(betrag - betrag / (1 + r.ustSatz)),
+    };
+  }
+
   return {
     art: r.art,
     artBezeichnung: ART_BEZEICHNUNG[r.art],
@@ -137,6 +167,7 @@ export function erstelleAbrechnung(r) {
     offeneposten,
     saldoOffen,
     zahlbetrag,
+    skonto,
     zeilen,
     zusammenstellung: bauZusammenstellung({
       zeilen, summeLeistungen, einbehaltNetto, summeAbzug,

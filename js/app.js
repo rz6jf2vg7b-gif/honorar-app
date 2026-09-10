@@ -65,6 +65,7 @@ async function leiten() {
     beleg: 'dashboard', belege: 'dashboard',
     projekt: 'projekte', adresse: 'kontakte', stammdaten: 'projekte', unterlagen: 'projekte',
     vorlagen: 'einstellungen', synopse: 'hoai', rechtliches: 'einstellungen',
+    buchhaltung: 'dashboard',
   }[weg] || weg;
   navigationBauen(bereich);
   leeren(inhalt);
@@ -111,6 +112,9 @@ async function leiten() {
     } else if (weg === 'unterlagen') {
       const { unterlagenZeigen } = await import('./ansichten/unterlagen.js');
       await unterlagenZeigen(inhalt, wert);
+    } else if (weg === 'buchhaltung') {
+      const { buchhaltungZeigen } = await import('./ansichten/buchhaltung.js');
+      await buchhaltungZeigen(inhalt);
     } else if (weg === 'rechtliches') {
       const { rechtlichesZeigen } = await import('./ansichten/rechtliches.js');
       await rechtlichesZeigen(inhalt);
