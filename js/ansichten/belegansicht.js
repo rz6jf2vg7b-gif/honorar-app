@@ -474,6 +474,12 @@ async function vorgangZeigen(wurzel, beleg, einst, neuZeichnen) {
     }
   }
 
+  // Was an Mahnungen rausging. Steht hier und nicht nur im Projekt: Wer den
+  // Beleg ansieht, will wissen, wo der Vorgang steht.
+  for (const m of beleg.mahnungen || []) {
+    werte.append(wzeile(`${m.stufe}. Mahnung`, isoNachDe(m.datum)));
+  }
+
   if (!beleg.gestelltAm) {
     const d = feld({ label: 'Versandt am', art: 'date', wert: heuteIso() });
     karte.append(el('div', { class: 'feldreihe' }, d,

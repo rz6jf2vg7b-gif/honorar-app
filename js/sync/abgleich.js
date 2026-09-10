@@ -113,7 +113,7 @@ export function verwaltungZusammen(lokal, fern) {
 
   // Ein Vermerk, den nur die andere Seite hat, geht sonst verloren, wenn dieses
   // Geraet zufaellig den juengeren Zeitstempel traegt.
-  for (const feld of ['gestelltAm', 'annahme', 'bezugBelegId', 'zahlungszielTage']) {
+  for (const feld of ['gestelltAm', 'annahme', 'bezugBelegId', 'zahlungszielTage', 'mahnungen']) {
     if (neu[feld] == null) neu[feld] = lokal[feld] ?? fern[feld] ?? null;
   }
   return JSON.stringify(neu) === JSON.stringify(lokal) ? null : neu;

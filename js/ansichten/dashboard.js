@@ -10,7 +10,7 @@
 // bleibt vom Projektnamen sonst nichts uebrig, und gezerrte Saeulen waren schon
 // bei der Zeiterfassungs-App der Fehler.
 
-import { el, leeren, eurZeigen, isoNachDe, feld } from '../ui.js';
+import { el, leeren, anfuegen, eurZeigen, isoNachDe, feld } from '../ui.js';
 import { SPEICHER, alle, einstellungenLesen } from '../db.js';
 import {
   BELEGART, BELEGART_TEXT, IST_RECHNUNG, IST_ANGEBOT, STATUS,
@@ -30,7 +30,7 @@ export async function dashboardZeigen(wurzel) {
   // Abschnitte mit Nullwerten zeigen es. Zugleich ist ablesbar, was noch fehlt.
   const leer = !belege.length;
 
-  wurzel.append(
+  anfuegen(wurzel,
     el('div', { class: 'seitenkopf' },
       el('h1', { text: 'Dashboard' }),
       el('button', { class: 'knopf akzent', onclick: () => { location.hash = '#neu'; } },
@@ -58,12 +58,7 @@ export async function dashboardZeigen(wurzel) {
       { text: 'Ersten Beleg anlegen', weg: '#neu', fertig: false,
         neben: 'Angebot, Rechnung oder Nachtrag' },
     ];
-    wurzel.append(el('div', { class: 'knopfreihe' }, el('button', {
-    class: 'knopf leise',
-    onclick: () => { location.hash = '#buchhaltung'; },
-  }, 'Belege nach Zeitraum · Buchhaltung')));
-
-  wurzel.append(el('div', { class: 'kennzahlen' },
+    wurzel.append(el('div', { class: 'kennzahlen' },
       kachel('Offen', eurZeigen(0), 'keine Rechnung gestellt'),
       kachel('Überfällig', eurZeigen(0), 'nichts überfällig'),
       kachel(`Eingegangen ${new Date().getFullYear()}`, eurZeigen(0), 'noch kein Eingang'),
@@ -117,6 +112,13 @@ export async function dashboardZeigen(wurzel) {
   const bezahltJahr = runde2(rechnungen
     .filter((b) => (b.datum || '').startsWith(String(jahr)))
     .reduce((s, b) => s + (b.gezahlt || 0), 0));
+
+  // Die zeitliche Sicht auf alle Belege — fuer die Voranmeldung und den
+  // Steuerberater. Das Dashboard gruppiert nach Projekt, weil man so arbeitet.
+  wurzel.append(el('div', { class: 'knopfreihe' }, el('button', {
+    class: 'knopf leise',
+    onclick: () => { location.hash = '#buchhaltung'; },
+  }, 'Belege nach Zeitraum · Buchhaltung')));
 
   wurzel.append(el('div', { class: 'kennzahlen' },
     kachel('Offen', eurZeigen(offen), `${offeneListe.length} Rechnung(en)`),

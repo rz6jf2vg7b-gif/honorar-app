@@ -521,8 +521,16 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
   const heute = heuteIso();
   const empf = adressen.find((a) => a.id === (offene[0].beleg.adresseId || projekt.adresseId));
 
+  // Die naechste Stufe vorschlagen, nicht immer bei 1 anfangen: Wer schon
+  // gemahnt hat, will die zweite Mahnung — und niemand merkt sich, wo er stand.
+  const { letzteMahnung } = await import('../vorgang.js');
+  const hoechste = offene
+    .map((p) => letzteMahnung(p.beleg)?.stufe || 0)
+    .reduce((a, b) => Math.max(a, b), 0);
+  const vorschlag = Math.min(hoechste + 1, MAHNSTUFEN.length);
+
   const stufeF = feld({
-    label: 'Mahnstufe', art: 'auswahl', wert: '1',
+    label: 'Mahnstufe', art: 'auswahl', wert: String(vorschlag),
     optionen: MAHNSTUFEN.map((s) => ({ wert: String(s.nr), text: `${s.nr}. ${s.titel}` })),
   });
   const datumF = feld({ label: 'Datum der Mahnung', art: 'date', wert: heute });
@@ -544,6 +552,15 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
         + (p.faelligAm ? ` · fällig seit ${isoNachDe(p.faelligAm)}` : ' · ohne Fälligkeit'),
     }),
   }));
+
+  // Was bisher rausging — damit man nicht zweimal dieselbe Stufe schickt.
+  const historie = el('div');
+  for (const p of offene) {
+    for (const m of p.beleg.mahnungen || []) {
+      historie.append(el('p', { class: 'klein', text:
+        `${p.nummer}: ${m.stufe}. Mahnung am ${isoNachDe(m.datum)}` }));
+    }
+  }
 
   const vorschau = el('div', { class: 'karte' });
   const rechnen = () => {
@@ -586,6 +603,7 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
     el('p', { class: 'klein', text: 'Eine Mahnung über alle offenen Rechnungen dieses Projekts. '
       + 'Verzugszinsen werden taggenau ab Fälligkeit gerechnet.' }),
     el('div', { class: 'feldreihe' }, stufeF, datumF),
+    historie,
     ...auswahl.map((x) => x.f),
     verbraucherF, pauschaleF,
     vorschau,
@@ -618,6 +636,13 @@ async function mahnungFormular(wurzel, projekt, adressen, belege) {
           if (!w) { melden('Der Browser hat das Fenster blockiert.', 'fehler'); return; }
           w.document.open(); w.document.write(html); w.document.close();
           setTimeout(() => { try { w.print(); } catch { /* egal */ } }, 700);
+
+          // Erst jetzt vermerken: Was nur angesehen wurde, ist nicht verschickt.
+          const { mahnungVermerken } = await import('../vorgang.js');
+          await mahnungVermerken(m.zeilen.map((z) => z.beleg.id), {
+            stufe: m.stufe, datum: m.datum, zinsen: m.zinsen, gesamt: m.gesamt,
+          });
+          melden(`${m.stufe}. Mahnung vermerkt.`);
           dlg.close();
         },
       }, 'Mahnung drucken')),

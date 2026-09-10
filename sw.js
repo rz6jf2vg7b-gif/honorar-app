@@ -16,7 +16,7 @@
 // Nutzerdaten liegen in IndexedDB und werden hier nie angefasst — ein Fehler im
 // Service Worker darf niemals eine Rechnung kosten.
 
-const FASSUNG = 'honorarapp-v23';
+const FASSUNG = 'honorarapp-v24';
 
 // Wie lange auf das Netz gewartet wird, bevor der Zwischenspeicher einspringt.
 // Kurz genug, dass es im Zug nicht haengt; lang genug fuer eine normale Antwort.

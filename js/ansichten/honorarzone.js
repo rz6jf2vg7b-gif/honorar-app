@@ -16,7 +16,7 @@
 // Ergebnis sind Zone UND Begründung. Die Begründung ist kein Beiwerk: Sie
 // erscheint auf dem Beleg und ist das, was im Streitfall zählt.
 
-import { el, leeren, feld, melden } from '../ui.js';
+import { el, anfuegen, leeren, feld, melden } from '../ui.js';
 import { HONORARZONEN_BEWERTUNG, zoneAusPunkten, vorbelegung } from '../hoai/honorarzonen.js';
 import { OBJEKTLISTEN } from '../hoai/objektlisten.js';
 import { ZONE_ROEMISCH, HONORARZONEN, LEISTUNGSBILDER, honorarzonenFuer } from '../hoai/leistungsbilder.js';
@@ -114,7 +114,7 @@ export function honorarzoneErmitteln(o) {
   const zeichneMerkmale = () => {
     leeren(merkmalBox);
     if (!b.punkte) {
-      merkmalBox.append(
+      anfuegen(merkmalBox,
         el('p', { class: 'fliess', text: b.hinweis }),
         b.merkmale.length
           ? el('ul', { class: 'liste schlicht' }, ...b.merkmale.map((m) =>

@@ -72,6 +72,7 @@ const VERWALTUNGSFELDER = new Set([
   'annahme',         // {am, art, bemerkung, positionen, phasen}
   'bezugBelegId',    // Rechnung -> Angebot/Nachtrag
   'zahlungen', 'gezahlt',
+  'mahnungen',       // [{stufe, datum, zinsen, gesamt}] — was wann rausging
   'notiz',
 ]);
 
@@ -377,6 +378,35 @@ export async function belegUebernehmen({
   await schreiben(SPEICHER.BELEGE, satz);
   return satz;
 }
+
+/**
+ * Eine verschickte Mahnung am Beleg vermerken.
+ *
+ * Ohne diesen Vermerk weiss beim naechsten Mal niemand, ob und wann Stufe 1
+ * rausging — und das ist keine Ordnungsfrage: Wer gerichtlich vorgehen will,
+ * muss den Verzug belegen koennen, und wer versehentlich zweimal die erste
+ * Mahnung schickt, verliert beim Bauherrn an Ernsthaftigkeit.
+ *
+ * Vermerkt wird beim Drucken, nicht beim Rechnen: Was nur angesehen wurde, ist
+ * nicht verschickt.
+ */
+export async function mahnungVermerken(belegIds, { stufe, datum, zinsen = 0, gesamt = 0 }) {
+  const vermerkt = [];
+  for (const id of belegIds) {
+    const b = await lesen(SPEICHER.BELEGE, id);
+    if (!b) continue;
+    const bisher = b.mahnungen || [];
+    const satz = await verwaltungsdatenSetzen(id, {
+      mahnungen: [...bisher, { stufe, datum: datum || heute(), zinsen, gesamt }],
+    });
+    vermerkt.push(satz);
+  }
+  return vermerkt;
+}
+
+/** Hoechste bisher verschickte Mahnstufe eines Belegs. */
+export const letzteMahnung = (beleg) => (beleg?.mahnungen || [])
+  .reduce((h, m) => (m.stufe > (h?.stufe ?? 0) ? m : h), null);
 
 /** Offene Posten eines Projekts fuer die Zahlungsuebersicht. */
 export async function offenePosten(projektId, eigeneId = null) {

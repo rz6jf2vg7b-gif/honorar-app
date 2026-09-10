@@ -10,7 +10,7 @@
 //              Titel "Vorgaben fuer neue Belege" las sich wie eine zentrale
 //              Vorschrift und hat genau diesen Eindruck erweckt.
 
-import { el, leeren, melden, feld, farbfeld, bildLaden, zahlZeigen, dateiSpeichern, dateiLaden, bestaetigen } from '../ui.js';
+import { el, anfuegen, leeren, melden, feld, farbfeld, bildLaden, zahlZeigen, dateiSpeichern, dateiLaden, bestaetigen } from '../ui.js';
 import { einstellungenLesen, einstellungenSchreiben, sicherungErstellen, sicherungEinspielen } from '../db.js';
 import { LEISTUNGSBILDER, HONORARSAETZE } from '../hoai/leistungsbilder.js';
 import { SCHRIFTEN } from '../beleg/cd.js';
@@ -341,7 +341,7 @@ export async function einstellungenZeigen(wurzel) {
     const zeichnen = () => {
       leeren(box);
       const hat = !!e.cd.logo;
-      box.append(
+      anfuegen(box,
         el('div', { class: `logovorschau ${hat ? '' : 'leer'}` },
           hat ? el('img', { src: e.cd.logo, alt: 'Hinterlegtes Logo' })
             : el('span', { class: 'klein', text: 'Kein Logo — der Belegkopf nutzt die Wortmarke.' })),

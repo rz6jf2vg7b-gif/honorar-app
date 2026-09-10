@@ -25,6 +25,23 @@ export function el(tag, attr = {}, ...kinder) {
 
 export const leeren = (n) => { while (n.firstChild) n.removeChild(n.firstChild); return n; };
 
+/**
+ * Kinder anhaengen und dabei null/undefined/false ueberspringen.
+ *
+ * `el()` tut das laengst, aber ein direktes `wurzel.append(x, bedingung ? y : null)`
+ * geht an der DOM-Schnittstelle vorbei — und die macht aus einem Nullwert einen
+ * sichtbaren Textknoten "null". Auf dem Dashboard stand er zwischen Ueberschrift
+ * und Kennzahlen, sobald der erste Beleg erfasst war (gefunden am 10.09.2026,
+ * derselbe Fehler wie seinerzeit in der Zeiterfassung).
+ */
+export function anfuegen(ziel, ...kinder) {
+  for (const kind of kinder.flat()) {
+    if (kind === null || kind === undefined || kind === false) continue;
+    ziel.append(kind instanceof Node ? kind : document.createTextNode(String(kind)));
+  }
+  return ziel;
+}
+
 // ————————————————————————————————————————————————————————————————
 // Zurueckgehen
 // ————————————————————————————————————————————————————————————————
