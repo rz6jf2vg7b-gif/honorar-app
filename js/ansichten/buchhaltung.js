@@ -11,6 +11,7 @@ import {
 import { SPEICHER, alle } from '../db.js';
 import { BELEGART_TEXT, IST_RECHNUNG, STATUS, faelligAm, belegBrutto } from '../vorgang.js';
 import { buchhaltungCsv, buchhaltungSummen } from '../beleg/buchhaltung.js';
+import { istUebung } from '../beleg/uebung.js';
 
 const jahrVon = (iso) => Number(String(iso || '').slice(0, 4));
 
@@ -64,6 +65,8 @@ export async function buchhaltungZeigen(wurzel) {
     const von = vonF.eingabe.value || '0000-01-01';
     const bis = bisF.eingabe.value || '9999-12-31';
     return belege
+      // Übungsbelege gehören nicht zum Steuerberater.
+      .filter((b) => !istUebung(b))
       .filter((b) => (b.datum || '') >= von && (b.datum || '') <= bis)
       .filter((b) => (artF.eingabe.value === 'alle'
         ? true

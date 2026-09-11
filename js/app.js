@@ -24,6 +24,7 @@ const ANSICHTEN = [
 const NEBENANSICHTEN = [
   { weg: 'rechner', text: 'Rechner', symbol: SYMBOL.rechner },
   { weg: 'hoai', text: 'HOAI', symbol: SYMBOL.buch },
+  { weg: 'lernen', text: 'Lernen', symbol: SYMBOL.hilfe },
   { weg: 'hilfe', text: 'Hilfe', symbol: SYMBOL.hilfe },
 ];
 
@@ -65,7 +66,7 @@ async function leiten() {
     beleg: 'dashboard', belege: 'dashboard',
     projekt: 'projekte', adresse: 'kontakte', stammdaten: 'projekte', unterlagen: 'projekte',
     vorlagen: 'einstellungen', synopse: 'hoai', rechtliches: 'einstellungen',
-    buchhaltung: 'dashboard',
+    buchhaltung: 'dashboard', lernen: 'hilfe',
   }[weg] || weg;
   navigationBauen(bereich);
   leeren(inhalt);
@@ -100,6 +101,9 @@ async function leiten() {
     } else if (weg === 'kontakte') {
       const { kontakteZeigen } = await import('./ansichten/stammdaten.js');
       await kontakteZeigen(inhalt);
+    } else if (weg === 'lernen') {
+      const { lernenZeigen } = await import('./ansichten/lernen.js');
+      await lernenZeigen(inhalt);
     } else if (weg === 'hilfe') {
       const { hilfeZeigen } = await import('./ansichten/hilfe.js');
       await hilfeZeigen(inhalt);

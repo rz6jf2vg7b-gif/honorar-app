@@ -17,6 +17,7 @@ import {
   ermittlungAusVertrag, faelligAm, belegBrutto,
 } from '../vorgang.js';
 import { runde2, prozent } from '../hoai/geld.js';
+import { istUebung } from '../beleg/uebung.js';
 
 
 export async function dashboardZeigen(wurzel) {
@@ -57,6 +58,11 @@ export async function dashboardZeigen(wurzel) {
         neben: adressen.length ? `${adressen.length} vorhanden` : 'Empfänger der Rechnungen' },
       { text: 'Ersten Beleg anlegen', weg: '#neu', fertig: false,
         neben: 'Angebot, Rechnung oder Nachtrag' },
+      // Am Ende, nicht am Anfang: Wer die App öffnet, will meist etwas
+      // erledigen. Das Angebot zum Üben soll dastehen, wenn der erste Versuch
+      // stockt — nicht als Hürde davor.
+      { text: 'Lieber erst üben', weg: '#lernen', fertig: false,
+        neben: 'den ganzen Weg an einem Übungsprojekt durchspielen' },
     ];
     wurzel.append(el('div', { class: 'kennzahlen' },
       kachel('Offen', eurZeigen(0), 'keine Rechnung gestellt'),
@@ -84,7 +90,11 @@ export async function dashboardZeigen(wurzel) {
 
   const heute = Date.now();
   const jahr = new Date().getFullYear();
-  const rechnungen = belege.filter((b) => IST_RECHNUNG(b.art) && b.status === STATUS.FEST);
+  // Übungsbelege bleiben aus den Kennzahlen heraus: Ein geübter Umsatz ist
+  // keiner, und wer beim Lernen eine Rechnung festschreibt, soll nicht danach
+  // einen falschen Jahresumsatz vor sich haben.
+  const echte = belege.filter((b) => !istUebung(b));
+  const rechnungen = echte.filter((b) => IST_RECHNUNG(b.art) && b.status === STATUS.FEST);
 
   // ── Kennzahlen ───────────────────────────────────────
   const offeneListe = rechnungen
@@ -105,7 +115,7 @@ export async function dashboardZeigen(wurzel) {
 
   // Angebote, die draussen sind und auf Antwort warten. Sie sind der Vorlauf des
   // Geschaefts — ohne sie sieht das Dashboard nur zurueck.
-  const offeneAngebote = belege.filter((b) => IST_ANGEBOT(b.art)
+  const offeneAngebote = echte.filter((b) => IST_ANGEBOT(b.art)
     && b.status === STATUS.FEST && !b.annahme);
   const summeAngebote = runde2(offeneAngebote.reduce((s, b) => s + (b.brutto || 0), 0));
 
@@ -257,6 +267,9 @@ function zeichnenBelege(box, stand, alleBelege, projekte, suche, zielTage = 30) 
  * steht aus, Rechnung ueberfaellig.
  */
 function belegZustand(b, zielTage = 30) {
+  // Übungsbelege bleiben in der Liste sichtbar — man sucht sie ja —, aber sie
+  // müssen als solche erkennbar sein. Aus den Kennzahlen sind sie heraus.
+  if (istUebung(b)) return 'Übung';
   if (b.status === STATUS.ENTWURF) return 'Entwurf';
   if (b.status === STATUS.STORNIERT) return 'storniert';
 

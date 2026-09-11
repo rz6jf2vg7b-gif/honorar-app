@@ -69,6 +69,16 @@ export async function hilfeZeigen(wurzel) {
             onclick: () => { location.hash = a.verweis.weg; } }, a.verweis.text))
         : null,
     ]),
+    el('div', { class: 'karte hinweiskarte' },
+      el('h3', { text: 'Lieber einmal ausprobieren?' }),
+      el('p', { class: 'klein', text: 'Die Lernstrecke führt einmal durch den ganzen Weg — '
+        + 'Angebot, Annahme, Abschlag, Zahlung, Mahnung, Schlussrechnung — an einem '
+        + 'Übungsprojekt, das nichts mit deiner Buchhaltung zu tun hat und sich danach '
+        + 'restlos entfernen lässt.' }),
+      el('div', { class: 'knopfreihe' }, el('button', {
+        class: 'knopf akzent', onclick: () => { location.hash = '#lernen'; },
+      }, 'Die App lernen'))),
+
     el('div', { class: 'abschnitt' }, el('h2', { text: 'Weiter' })),
     el('div', { class: 'knopfreihe' },
       el('button', { class: 'knopf zweit', onclick: () => { location.hash = '#hoai'; } }, 'HOAI'),
